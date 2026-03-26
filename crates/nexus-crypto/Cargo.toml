@@ -1,0 +1,25 @@
+[package]
+name         = "nexus-crypto"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+description  = "Safe high-level cryptographic API: key generation, signing, verification, KEM."
+
+[dependencies]
+nexus-primitives   = { workspace = true }
+zeroize            = { workspace = true }
+rand               = { workspace = true }
+thiserror          = { workspace = true }
+serde              = { workspace = true }
+blake3             = { workspace = true }
+hex                = { workspace = true }
+pqcrypto-falcon    = { workspace = true }
+pqcrypto-traits    = { workspace = true }
+ml-dsa             = { workspace = true }
+ml-kem             = { workspace = true }
+getrandom          = { workspace = true }
+rayon              = { workspace = true }
+
+[dev-dependencies]
+nexus-test-utils = { workspace = true }

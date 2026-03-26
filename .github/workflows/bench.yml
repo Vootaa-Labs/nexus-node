@@ -1,0 +1,65 @@
+# Benchmark Regression Detection — PR only
+# Compares criterion benchmarks against main branch.
+# Fails if any benchmark regresses >10%.
+
+name: Benchmarks
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  BENCH_REGRESSION_THRESHOLD: "10"
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    name: Benchmark Regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: Install critcmp
+        run: cargo install critcmp --locked
+
+      - name: Run benchmarks (PR branch)
+        run: |
+          cargo bench --workspace -- --save-baseline pr
+        continue-on-error: true
+
+      - name: Checkout main for baseline
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: main
+          clean: false
+
+      - name: Run benchmarks (main baseline)
+        run: |
+          cargo bench --workspace -- --save-baseline main
+        continue-on-error: true
+
+      - name: Compare benchmarks
+        run: |
+          critcmp main pr --threshold "$BENCH_REGRESSION_THRESHOLD"

@@ -1,0 +1,2 @@
+# Use Cargo's default source resolution (crates.io and declared git sources).
+# Local patched Move crates still come from workspace paths configured in `Cargo.toml`.

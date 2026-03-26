@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "corpus_id": "VO-AG-002_session_fsm",
+    "invariant_id": "FV-AC-002",
+    "description": "Canonical corpus for session FSM — valid transitions accepted, invalid rejected, terminal states absorbing",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "fsm_happy_path",
+      "description": "Created → Negotiating → Active → Completed — full lifecycle",
+      "transitions": [
+        {"from": "Created",      "event": "start_negotiation", "to": "Negotiating", "valid": true},
+        {"from": "Negotiating",  "event": "agree",             "to": "Active",      "valid": true},
+        {"from": "Active",       "event": "finish",            "to": "Completed",   "valid": true}
+      ]
+    },
+    {
+      "id": "fsm_cancel_from_negotiating",
+      "description": "Negotiating → Cancelled — early exit",
+      "transitions": [
+        {"from": "Created",      "event": "start_negotiation", "to": "Negotiating", "valid": true},
+        {"from": "Negotiating",  "event": "cancel",            "to": "Cancelled",   "valid": true}
+      ]
+    },
+    {
+      "id": "fsm_terminal_absorbing",
+      "description": "Completed is terminal — any event from Completed is invalid",
+      "transitions": [
+        {"from": "Completed", "event": "start_negotiation", "to": null, "valid": false},
+        {"from": "Completed", "event": "cancel",            "to": null, "valid": false},
+        {"from": "Completed", "event": "finish",            "to": null, "valid": false}
+      ]
+    },
+    {
+      "id": "fsm_suspended_resume",
+      "description": "Active → Suspended → Active — pause and resume",
+      "transitions": [
+        {"from": "Active",    "event": "suspend", "to": "Suspended", "valid": true},
+        {"from": "Suspended", "event": "resume",  "to": "Active",    "valid": true}
+      ]
+    },
+    {
+      "id": "fsm_invalid_skip",
+      "description": "Created → Active directly — skip negotiation, must be rejected",
+      "transitions": [
+        {"from": "Created", "event": "agree", "to": null, "valid": false}
+      ]
+    }
+  ]
+}

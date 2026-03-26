@@ -1,0 +1,44 @@
+[package]
+name         = "nexus-execution"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+description  = "Move VM execution engine with Block-STM parallel execution for Nexus."
+
+[dependencies]
+nexus-primitives = { workspace = true }
+nexus-crypto     = { workspace = true }
+nexus-storage    = { workspace = true }
+nexus-consensus  = { workspace = true }
+nexus-config     = { workspace = true }
+tokio            = { workspace = true }
+thiserror        = { workspace = true }
+serde            = { workspace = true }
+tracing          = { workspace = true }
+metrics          = { workspace = true }
+bcs              = { workspace = true }
+blake3           = { workspace = true }
+rayon            = { workspace = true }
+dashmap          = { workspace = true }
+crossbeam        = { workspace = true }
+parking_lot      = { workspace = true }
+num_cpus         = { workspace = true }
+
+# Move VM (only compiled when feature "move-vm" is active)
+# All move-* types consumed via nexus-move-runtime::upstream (FORMAL-03 §8.2)
+nexus-move-runtime       = { workspace = true, optional = true, features = ["vm-backend"] }
+nexus-move-types         = { workspace = true, optional = true }
+bytes                    = { workspace = true, optional = true }
+
+[features]
+default  = ["move-vm"]
+move-vm  = [
+    "dep:nexus-move-runtime",
+    "dep:nexus-move-types",
+    "dep:bytes",
+]
+
+[dev-dependencies]
+nexus-test-utils = { workspace = true }
+proptest          = { workspace = true }

@@ -1,0 +1,46 @@
+{
+  "metadata": {
+    "corpus_id": "VO-AG-003_a2a_negotiation",
+    "invariant_id": "FV-AC-001",
+    "description": "Canonical corpus for A2A delegation chain — monotonic scope contraction, valid chain integrity",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "a2a_valid_2_hop",
+      "description": "User → Agent A → Agent B, scope contracts at each hop",
+      "chain": [
+        {"delegator_seed": "user_0", "delegate_seed": "agent_a", "scope": {"max_amount": 1000, "allowed_ops": ["transfer", "stake"]}},
+        {"delegator_seed": "agent_a", "delegate_seed": "agent_b", "scope": {"max_amount": 500, "allowed_ops": ["transfer"]}}
+      ],
+      "expected": {"chain_valid": true, "scope_monotonic": true}
+    },
+    {
+      "id": "a2a_scope_escalation",
+      "description": "Agent B tries to expand scope beyond Agent A's — rejected",
+      "chain": [
+        {"delegator_seed": "user_0", "delegate_seed": "agent_a", "scope": {"max_amount": 500, "allowed_ops": ["transfer"]}},
+        {"delegator_seed": "agent_a", "delegate_seed": "agent_b", "scope": {"max_amount": 1000, "allowed_ops": ["transfer", "stake"]}}
+      ],
+      "expected": {"chain_valid": false, "reason": "scope_escalation"}
+    },
+    {
+      "id": "a2a_zero_hop",
+      "description": "Direct user action, no delegation — trivially valid",
+      "chain": [
+        {"delegator_seed": "user_0", "delegate_seed": "user_0", "scope": {"max_amount": 9999, "allowed_ops": ["transfer", "stake", "govern"]}}
+      ],
+      "expected": {"chain_valid": true, "scope_monotonic": true}
+    },
+    {
+      "id": "a2a_broken_chain",
+      "description": "Hop 2 delegator does not match hop 1 delegate — chain integrity broken",
+      "chain": [
+        {"delegator_seed": "user_0", "delegate_seed": "agent_a", "scope": {"max_amount": 1000, "allowed_ops": ["transfer"]}},
+        {"delegator_seed": "agent_x", "delegate_seed": "agent_b", "scope": {"max_amount": 500, "allowed_ops": ["transfer"]}}
+      ],
+      "expected": {"chain_valid": false, "reason": "delegator_mismatch"}
+    }
+  ]
+}

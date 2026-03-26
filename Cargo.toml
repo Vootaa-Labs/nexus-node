@@ -1,0 +1,168 @@
+[workspace]
+members = [
+    "crates/nexus-primitives",
+    "crates/nexus-crypto",
+    "crates/nexus-network",
+    "crates/nexus-storage",
+    "crates/nexus-consensus",
+    "crates/nexus-execution",
+    "crates/nexus-intent",
+    "crates/nexus-rpc",
+    "crates/nexus-config",
+    "crates/nexus-node",
+    "tools/nexus-keygen",
+    "tools/nexus-genesis",
+    "tools/nexus-bench",
+    "tools/nexus-wallet",
+    "tests/nexus-test-utils",
+]
+default-members = [
+    "crates/nexus-primitives",
+    "crates/nexus-crypto",
+    "crates/nexus-network",
+    "crates/nexus-storage",
+    "crates/nexus-consensus",
+    "crates/nexus-execution",
+    "crates/nexus-intent",
+    "crates/nexus-rpc",
+    "crates/nexus-config",
+    "crates/nexus-node",
+    "tools/nexus-keygen",
+    "tools/nexus-genesis",
+    "tools/nexus-bench",
+    "tools/nexus-wallet",
+    "tests/nexus-test-utils",
+]
+resolver = "2"
+
+# ---------------------------------------------------------------------------
+# Workspace-level package metadata (inherited by all crates via .workspace = true)
+# ---------------------------------------------------------------------------
+[workspace.package]
+version      = "0.1.13"
+edition      = "2021"
+license      = "MIT OR Apache-2.0"
+rust-version = "1.85.0"
+repository   = "https://github.com/nexus-blockchain/nexus"
+authors      = ["Nexus Contributors"]
+homepage     = "https://github.com/nexus-blockchain/nexus"
+publish      = false
+
+# ---------------------------------------------------------------------------
+# Shared dependency versions — each crate opts-in with `dep = { workspace = true }`
+# ---------------------------------------------------------------------------
+[workspace.dependencies]
+# --- Internal crates -------------------------------------------------------
+nexus-primitives = { path = "crates/nexus-primitives" }
+nexus-crypto     = { path = "crates/nexus-crypto" }
+nexus-network    = { path = "crates/nexus-network" }
+nexus-storage    = { path = "crates/nexus-storage" }
+nexus-consensus  = { path = "crates/nexus-consensus" }
+nexus-execution  = { path = "crates/nexus-execution" }
+nexus-intent     = { path = "crates/nexus-intent" }
+nexus-rpc        = { path = "crates/nexus-rpc" }
+nexus-config     = { path = "crates/nexus-config" }
+nexus-node       = { path = "crates/nexus-node" }
+nexus-test-utils = { path = "tests/nexus-test-utils" }
+
+# --- nexus-move crates (stable facade consumption, FORMAL-03 §11) -------------
+nexus-move-types    = { git = "https://github.com/vootaa-labs/nexus-move", tag = "v0.1.1" }
+nexus-move-bytecode = { git = "https://github.com/vootaa-labs/nexus-move", tag = "v0.1.1" }
+nexus-move-runtime  = { git = "https://github.com/vootaa-labs/nexus-move", tag = "v0.1.1" }
+nexus-move-package  = { git = "https://github.com/vootaa-labs/nexus-move", tag = "v0.1.1" }
+
+# --- Error handling ---------------------------------------------------------
+thiserror = "1"
+anyhow    = "1"
+
+# --- Serialization ----------------------------------------------------------
+serde      = { version = "1",     features = ["derive"] }
+serde_json = "1"
+bcs        = "0.1.6"
+toml       = "~0.8"
+
+# --- Async runtime ----------------------------------------------------------
+tokio   = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# --- Cryptography -----------------------------------------------------------
+zeroize          = { version = "1", features = ["derive"] }
+rand             = "0.8"
+blake3           = "1"
+hex              = "0.4"
+pqcrypto-falcon  = { version = "0.4", features = ["std"] }
+pqcrypto-traits  = "0.3"
+ml-dsa           = { version = "0.1.0-rc.7", features = ["zeroize"] }
+ml-kem           = { version = "0.3.0-rc.0", features = ["zeroize"] }
+getrandom        = { version = "0.3", features = ["std"] }
+rayon            = "1"
+dashmap          = "6"
+crossbeam        = "0.8"
+parking_lot      = "0.12"
+num_cpus         = "1"
+
+# --- Web / RPC --------------------------------------------------------------
+axum              = { version = "0.7", features = ["ws"] }
+axum-extra        = { version = "0.9", features = ["typed-header"] }
+tower             = { version = "0.5", features = ["util", "timeout"] }
+tower-http        = { version = "0.6", features = ["cors", "trace", "request-id"] }
+governor          = "0.8"
+hyper             = "1"
+http              = "1"
+uuid              = { version = "~1.8", features = ["v4"] }
+
+# --- P2P Networking ---------------------------------------------------------
+libp2p            = { version = "0.54", features = [
+    "quic", "gossipsub", "kad", "noise", "identify",
+    "request-response", "tokio", "macros", "tcp", "yamux",
+] }
+libp2p-identity   = { version = "0.2", features = ["ed25519", "peerid", "rand"] }
+async-trait       = "0.1"
+bytes             = "1"
+
+# --- Observability ----------------------------------------------------------
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+metrics            = "0.24"
+metrics-exporter-prometheus = { version = "0.16", default-features = false }
+
+# --- Storage ---------------------------------------------------------------
+rocksdb  = "~0.22"
+tempfile = "~3.14"
+
+# --- CLI --------------------------------------------------------------------
+clap = { version = "4", features = ["derive"] }
+ureq = { version = "2", features = ["json"] }
+
+# --- Move VM (via nexus-move v0.1.1 facade crates) ---
+# Vendor move-* crates removed per FORMAL-03 §4.
+# All move-* types consumed via nexus-move-runtime::upstream.
+
+# --- Testing / benchmarks ---------------------------------------------------
+proptest  = "1"
+criterion = { version = "0.5", features = ["html_reports"] }
+crossterm = "0.26.1"
+tui       = "0.19.0"
+
+[profile.release]
+opt-level       = 3
+lto             = "thin"
+codegen-units   = 1
+panic           = "abort"
+overflow-checks = true
+strip           = "debuginfo"
+
+[profile.ci]
+inherits        = "test"
+opt-level       = 1
+overflow-checks = true
+
+[profile.bench]
+inherits = "release"
+debug    = true
+strip    = "none"
+
+[profile.dev]
+# Faster incremental builds in CI
+debug         = 1
+incremental   = true

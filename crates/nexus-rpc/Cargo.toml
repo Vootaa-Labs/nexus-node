@@ -1,0 +1,38 @@
+[package]
+name         = "nexus-rpc"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+description  = "External-facing RPC layer: GraphQL (clients) and gRPC (validator RPC) for Nexus."
+
+[dependencies]
+nexus-primitives = { workspace = true }
+nexus-config     = { workspace = true }
+nexus-crypto     = { workspace = true }
+nexus-consensus  = { workspace = true }
+nexus-execution  = { workspace = true }
+nexus-intent     = { workspace = true }
+bcs              = { workspace = true }
+blake3           = { workspace = true }
+tokio            = { workspace = true }
+thiserror        = { workspace = true }
+serde            = { workspace = true }
+serde_json       = { workspace = true }
+tracing          = { workspace = true }
+hex              = { workspace = true }
+axum             = { workspace = true }
+axum-extra       = { workspace = true }
+tower            = { workspace = true }
+tower-http       = { workspace = true }
+nexus-storage    = { workspace = true }
+http             = { workspace = true }
+uuid             = { workspace = true }
+parking_lot      = { workspace = true }
+metrics          = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+
+[dev-dependencies]
+nexus-test-utils = { workspace = true }
+hyper            = { workspace = true }
+tempfile         = { workspace = true }

@@ -1,0 +1,38 @@
+{
+  "metadata": {
+    "corpus_id": "VO-CO-007_cert_domain_separation",
+    "invariant_id": "FV-CO-007",
+    "description": "Canonical corpus for certificate domain separation — different payload types produce distinct digests",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "domain_batch_vs_cert",
+      "description": "Same raw bytes signed under BATCH vs CERTIFICATE domain — digests must differ",
+      "raw_bytes_seed": "domain_sep_test_payload_42",
+      "domain_a": "NEXUS-BATCH",
+      "domain_b": "NEXUS-CERTIFICATE",
+      "expected": {"digests_equal": false}
+    },
+    {
+      "id": "domain_cert_vs_vote",
+      "description": "Same raw bytes signed under CERTIFICATE vs VOTE domain — digests must differ",
+      "raw_bytes_seed": "same_payload_for_both",
+      "domain_a": "NEXUS-CERTIFICATE",
+      "domain_b": "NEXUS-VOTE",
+      "expected": {"digests_equal": false}
+    },
+    {
+      "id": "domain_all_10_pairwise",
+      "description": "10 domain tags × 10 on fixed payload — all 45 pairs produce distinct digests",
+      "raw_bytes_seed": "pairwise_test_123",
+      "domains": [
+        "NEXUS-BATCH", "NEXUS-CERTIFICATE", "NEXUS-VOTE",
+        "NEXUS-BLOCK", "NEXUS-TX", "NEXUS-STATE",
+        "NEXUS-ACCOUNT", "NEXUS-INTENT", "NEXUS-SESSION", "NEXUS-AGENT"
+      ],
+      "expected": {"all_45_pairs_distinct": true}
+    }
+  ]
+}

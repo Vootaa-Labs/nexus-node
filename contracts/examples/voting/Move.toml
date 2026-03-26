@@ -1,0 +1,11 @@
+[package]
+name = "voting"
+version = "1.0.0"
+upgrade_policy = "immutable"
+
+[addresses]
+voting_addr = "_"
+std = "0x1"
+
+[dev-addresses]
+voting_addr = "0xCAFE"

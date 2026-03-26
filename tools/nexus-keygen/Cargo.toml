@@ -1,0 +1,25 @@
+[package]
+name         = "nexus-keygen"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+description  = "CLI tool for generating Nexus validator key pairs."
+
+[[bin]]
+name = "nexus-keygen"
+path = "src/main.rs"
+
+[dependencies]
+nexus-crypto     = { workspace = true }
+nexus-primitives = { workspace = true }
+anyhow           = { workspace = true }
+clap             = { workspace = true }
+serde            = { workspace = true }
+serde_json       = { workspace = true }
+hex              = { workspace = true }
+zeroize          = { workspace = true }
+libp2p-identity  = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

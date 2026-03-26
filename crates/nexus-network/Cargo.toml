@@ -1,0 +1,31 @@
+[package]
+name         = "nexus-network"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+description  = "P2P network transport layer (libp2p) for Nexus validator communication."
+
+[dependencies]
+nexus-primitives = { workspace = true }
+nexus-crypto     = { workspace = true }
+tokio            = { workspace = true }
+futures          = { workspace = true }
+async-trait      = { workspace = true }
+thiserror        = { workspace = true }
+serde            = { workspace = true }
+tracing          = { workspace = true }
+bcs              = { workspace = true }
+libp2p           = { workspace = true }
+bytes            = { workspace = true }
+dashmap          = { workspace = true }
+governor         = { workspace = true }
+parking_lot      = { workspace = true }
+hex              = { workspace = true }
+rand             = { workspace = true }
+metrics          = { workspace = true }
+
+[dev-dependencies]
+nexus-test-utils = { workspace = true }
+tokio            = { workspace = true, features = ["test-util"] }
+serde_json       = { workspace = true }

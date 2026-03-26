@@ -1,0 +1,64 @@
+[package]
+name         = "nexus-bench"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+description  = "Criterion micro-benchmark suite for Nexus cryptographic and consensus hot paths."
+
+[lib]
+name = "nexus_bench"
+path = "src/lib.rs"
+
+[[bench]]
+name    = "crypto_bench"
+harness = false
+
+[[bench]]
+name    = "consensus_bench"
+harness = false
+
+[[bench]]
+name    = "execution_bench"
+harness = false
+
+[[bench]]
+name    = "hash_bench"
+harness = false
+
+[[bench]]
+name    = "intent_bench"
+harness = false
+
+[[bench]]
+name    = "pipeline_bench"
+harness = false
+
+[[bench]]
+name    = "network_bench"
+harness = false
+
+[[bench]]
+name    = "commitment_bench"
+harness = false
+
+[dependencies]
+nexus-primitives = { workspace = true }
+nexus-crypto     = { workspace = true }
+nexus-consensus  = { workspace = true }
+nexus-execution  = { workspace = true }
+nexus-intent     = { workspace = true }
+nexus-network    = { workspace = true }
+nexus-config     = { workspace = true }
+nexus-storage    = { workspace = true }
+nexus-node       = { workspace = true }
+nexus-rpc        = { workspace = true }
+nexus-test-utils = { workspace = true }
+bcs              = { workspace = true }
+tokio            = { workspace = true }
+futures          = { workspace = true }
+serde_json       = { workspace = true }
+hex              = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }

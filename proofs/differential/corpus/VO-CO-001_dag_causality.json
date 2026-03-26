@@ -1,0 +1,70 @@
+{
+  "metadata": {
+    "corpus_id": "VO-CO-001_dag_causality",
+    "invariant_id": "FV-CO-002",
+    "description": "Canonical corpus for verifying DAG causal consistency — acyclic certificate history",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "dag_linear_4v",
+      "description": "4 validators, 3 rounds, linear DAG — every cert in round r references all certs in round r-1",
+      "validators": 4,
+      "rounds": [
+        {"round": 0, "certificates": [
+          {"origin": 0, "batch_digest_seed": "dag_r0_v0", "parents": []},
+          {"origin": 1, "batch_digest_seed": "dag_r0_v1", "parents": []},
+          {"origin": 2, "batch_digest_seed": "dag_r0_v2", "parents": []},
+          {"origin": 3, "batch_digest_seed": "dag_r0_v3", "parents": []}
+        ]},
+        {"round": 1, "certificates": [
+          {"origin": 0, "batch_digest_seed": "dag_r1_v0", "parents_from_round": 0},
+          {"origin": 1, "batch_digest_seed": "dag_r1_v1", "parents_from_round": 0},
+          {"origin": 2, "batch_digest_seed": "dag_r1_v2", "parents_from_round": 0},
+          {"origin": 3, "batch_digest_seed": "dag_r1_v3", "parents_from_round": 0}
+        ]},
+        {"round": 2, "certificates": [
+          {"origin": 0, "batch_digest_seed": "dag_r2_v0", "parents_from_round": 1},
+          {"origin": 1, "batch_digest_seed": "dag_r2_v1", "parents_from_round": 1},
+          {"origin": 2, "batch_digest_seed": "dag_r2_v2", "parents_from_round": 1},
+          {"origin": 3, "batch_digest_seed": "dag_r2_v3", "parents_from_round": 1}
+        ]}
+      ],
+      "invariants": ["dag_acyclic", "every_parent_in_prior_round"],
+      "expected": {
+        "total_certificates": 12,
+        "max_causal_depth": 3
+      }
+    },
+    {
+      "id": "dag_sparse_missing_validator",
+      "description": "4 validators, round 1 missing validator 2 — partial parent sets",
+      "validators": 4,
+      "rounds": [
+        {"round": 0, "certificates": [
+          {"origin": 0, "batch_digest_seed": "sp_r0_v0", "parents": []},
+          {"origin": 1, "batch_digest_seed": "sp_r0_v1", "parents": []},
+          {"origin": 2, "batch_digest_seed": "sp_r0_v2", "parents": []},
+          {"origin": 3, "batch_digest_seed": "sp_r0_v3", "parents": []}
+        ]},
+        {"round": 1, "certificates": [
+          {"origin": 0, "batch_digest_seed": "sp_r1_v0", "parents_from_round": 0},
+          {"origin": 1, "batch_digest_seed": "sp_r1_v1", "parents_from_round": 0},
+          {"origin": 3, "batch_digest_seed": "sp_r1_v3", "parents_from_round": 0}
+        ], "note": "validator 2 missing this round"},
+        {"round": 2, "certificates": [
+          {"origin": 0, "batch_digest_seed": "sp_r2_v0", "parents_from_round": 1},
+          {"origin": 1, "batch_digest_seed": "sp_r2_v1", "parents_from_round": 1},
+          {"origin": 2, "batch_digest_seed": "sp_r2_v2", "parents_from_round": 1},
+          {"origin": 3, "batch_digest_seed": "sp_r2_v3", "parents_from_round": 1}
+        ]}
+      ],
+      "invariants": ["dag_acyclic", "partial_parents_still_valid"],
+      "expected": {
+        "total_certificates": 11,
+        "round_1_count": 3
+      }
+    }
+  ]
+}

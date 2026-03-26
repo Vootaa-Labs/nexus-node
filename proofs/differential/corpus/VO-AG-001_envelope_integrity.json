@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "corpus_id": "VO-AG-001_envelope_integrity",
+    "invariant_id": "FV-AC-005",
+    "description": "Canonical corpus for AgentEnvelope integrity — digest covers all fields, tampering detected",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "env_valid_digest",
+      "description": "Well-formed envelope — digest matches recomputation",
+      "envelope": {
+        "agent_id_seed": "agent_alpha",
+        "session_id_seed": "session_001",
+        "parent_digest_seed": "parent_abc",
+        "payload_seed": "action_transfer_100",
+        "depth": 3,
+        "timestamp": 1710000000
+      },
+      "expected": {"digest_valid": true}
+    },
+    {
+      "id": "env_tampered_payload",
+      "description": "Payload mutated after signing — digest mismatch",
+      "envelope": {
+        "agent_id_seed": "agent_alpha",
+        "session_id_seed": "session_001",
+        "parent_digest_seed": "parent_abc",
+        "payload_seed": "action_transfer_100",
+        "depth": 3,
+        "timestamp": 1710000000
+      },
+      "tamper": "flip_payload_byte_0",
+      "expected": {"digest_valid": false}
+    },
+    {
+      "id": "env_tampered_depth",
+      "description": "Depth field altered — digest mismatch",
+      "envelope": {
+        "agent_id_seed": "agent_alpha",
+        "session_id_seed": "session_001",
+        "parent_digest_seed": "parent_abc",
+        "payload_seed": "action_transfer_100",
+        "depth": 3,
+        "timestamp": 1710000000
+      },
+      "tamper": "increment_depth",
+      "expected": {"digest_valid": false}
+    }
+  ]
+}

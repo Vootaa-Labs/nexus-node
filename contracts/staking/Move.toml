@@ -1,0 +1,11 @@
+[package]
+name = "staking"
+version = "1.0.0"
+upgrade_policy = "governance"
+
+[addresses]
+staking_addr = "_"
+std = "0x1"
+
+[dev-addresses]
+staking_addr = "0xBEEF"

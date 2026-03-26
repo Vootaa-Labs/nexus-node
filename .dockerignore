@@ -1,0 +1,29 @@
+# Build output
+target/
+fuzz/target/
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Devnet generated data
+devnet/
+devnet-*/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs / proofs (not needed for build)
+Docs/
+Docs_Dev/
+proofs/
+
+# Git
+.git/
+.github/
+
+# Context / summary markdown files inside crates
+**/*_Context.md
+**/*_Summary.md

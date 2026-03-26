@@ -1,0 +1,56 @@
+[package]
+name    = "nexus-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys  = "0.4"
+bcs            = "0.1.6"
+blake3         = "1"
+tempfile       = "~3.14"
+
+# Crates under test — use relative paths to the workspace root.
+nexus-consensus  = { path = "../crates/nexus-consensus" }
+nexus-execution  = { path = "../crates/nexus-execution", default-features = false }
+nexus-storage    = { path = "../crates/nexus-storage" }
+nexus-primitives = { path = "../crates/nexus-primitives" }
+nexus-network    = { path = "../crates/nexus-network" }
+nexus-node       = { path = "../crates/nexus-node" }
+
+[[bin]]
+name = "fuzz_bcs_transaction"
+path = "fuzz_targets/fuzz_bcs_transaction.rs"
+doc  = false
+
+[[bin]]
+name = "fuzz_bcs_certificate"
+path = "fuzz_targets/fuzz_bcs_certificate.rs"
+doc  = false
+
+[[bin]]
+name = "fuzz_snapshot_import"
+path = "fuzz_targets/fuzz_snapshot_import.rs"
+doc  = false
+
+[[bin]]
+name = "fuzz_gossip_message"
+path = "fuzz_targets/fuzz_gossip_message.rs"
+doc  = false
+
+[[bin]]
+name = "fuzz_state_sync_message"
+path = "fuzz_targets/fuzz_state_sync_message.rs"
+doc  = false
+
+[[bin]]
+name = "fuzz_move_bytecode"
+path = "fuzz_targets/fuzz_move_bytecode.rs"
+doc  = false
+
+# Self-contained workspace so the parent's [workspace] is not confused.
+[workspace]
+members = ["."]

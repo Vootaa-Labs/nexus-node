@@ -1,0 +1,42 @@
+[package]
+name         = "nexus-test-utils"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+description  = "Shared test fixtures, mock implementations, and helpers for Nexus test suites."
+
+[dependencies]
+nexus-primitives = { workspace = true }
+nexus-crypto     = { workspace = true }
+nexus-consensus  = { workspace = true }
+nexus-execution  = { workspace = true }
+nexus-intent     = { workspace = true }
+nexus-network    = { workspace = true }
+nexus-storage    = { workspace = true }
+nexus-config     = { workspace = true }
+nexus-node       = { workspace = true }
+nexus-rpc        = { workspace = true }
+bcs              = { workspace = true }
+blake3           = { workspace = true }
+hex              = { workspace = true }
+libp2p-identity  = { workspace = true }
+tokio            = { workspace = true, features = ["test-util"] }
+serde            = { workspace = true }
+serde_json       = { workspace = true }
+tempfile         = { workspace = true }
+tracing          = { workspace = true }
+tracing-subscriber = { workspace = true }
+rand             = { workspace = true }
+futures          = { workspace = true }
+ureq             = { workspace = true }
+anyhow           = { workspace = true }
+
+[features]
+default  = ["move-vm"]
+move-vm  = ["nexus-execution/move-vm"]
+
+[dev-dependencies]
+axum             = { workspace = true }
+http             = { workspace = true }
+tower            = { workspace = true }

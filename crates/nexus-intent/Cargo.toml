@@ -1,0 +1,28 @@
+[package]
+name         = "nexus-intent"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+description  = "User-intent routing and resolution layer — shard-transparent transaction dispatch."
+
+[dependencies]
+nexus-primitives = { workspace = true }
+nexus-crypto     = { workspace = true }
+nexus-execution  = { workspace = true }
+nexus-storage    = { workspace = true }
+tokio            = { workspace = true }
+thiserror        = { workspace = true }
+serde            = { workspace = true }
+serde_json       = { workspace = true }
+tracing          = { workspace = true }
+bcs              = { workspace = true }
+blake3           = { workspace = true }
+dashmap          = { workspace = true }
+parking_lot      = { workspace = true }
+metrics          = { workspace = true }
+
+[dev-dependencies]
+nexus-test-utils = { workspace = true }
+tokio            = { workspace = true, features = ["test-util", "macros"] }
+proptest         = { workspace = true }

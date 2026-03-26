@@ -1,0 +1,886 @@
+# CI Pipeline — nexus-node v0.1.13
+# Gates: Lint → Security Audit → Tests → Move VM → Security Negative → Recovery → Coverage → Crypto KAT
+# Triggered on every push and PR to main.
+#
+# NOTE: nexus-move is consumed via git dependencies (tag v0.1.1).
+# No companion checkout is needed — Cargo fetches the crates directly.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+  RUST_BACKTRACE: 1
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Gate 1: Lint (fmt + clippy + machete)
+  # --------------------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Install cargo-machete
+        run: cargo install cargo-machete --locked
+
+      - name: Check unused dependencies
+        run: cargo machete
+
+  # --------------------------------------------------------------------------
+  # Gate 2: Security Audit (cargo-audit + cargo-deny)
+  # --------------------------------------------------------------------------
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install audit tools
+        run: |
+          cargo install cargo-audit --locked
+          cargo install cargo-deny --locked
+
+      - name: Cargo audit (CVE check)
+        # Temporary waivers for libp2p 0.54.x TLS chain (see Docs/Report/BACKLOG.md)
+        run: |
+          cargo audit \
+            --ignore RUSTSEC-2025-0009 \
+            --ignore RUSTSEC-2026-0049 \
+            --ignore RUSTSEC-2026-0009
+
+      - name: Cargo deny (licenses + bans + sources)
+        # Advisory check handled by cargo-audit above; cargo-deny 0.18.x
+        # cannot parse CVSS 4.0 entries in the advisory DB.
+        run: cargo deny check licenses bans sources
+
+      - name: Check no debug features in release
+        run: |
+          if cargo tree --workspace --edges features 2>/dev/null | grep -q 'feature "debug"'; then
+            echo "::error::Debug features detected in dependency tree"
+            exit 1
+          fi
+
+  # --------------------------------------------------------------------------
+  # Gate 3: Tests (cargo nextest)
+  # --------------------------------------------------------------------------
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+
+      - name: Run tests (nextest)
+        run: cargo nextest run --profile ci
+
+      - name: Run doc-tests
+        run: cargo test --doc
+
+  # --------------------------------------------------------------------------
+  # Gate 3-vm: Move VM Integration Tests
+  #
+  # Tests nexus-execution with the move-vm feature enabled.
+  # Validates the nexus-move facade boundary works end-to-end.
+  # --------------------------------------------------------------------------
+  test-vm:
+    name: Move VM Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: Move VM integration tests
+        run: make test-vm
+
+  # --------------------------------------------------------------------------
+  # Gate 3a: Correctness-Negative Tests (Phase A–E release gate — F-4)
+  #
+  # All audit-required negative tests must pass for the build to be green.
+  # Regression in ANY of these tests is a release blocker.
+  # --------------------------------------------------------------------------
+  correctness-negative:
+    name: Correctness Negative Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+
+      # Phase A: Execution correctness
+      - name: "Phase A: Forged vote rejected (SEC-H2)"
+        run: cargo nextest run --all-targets -E 'test(forged_vote_should_be_rejected)'
+
+      - name: "Phase A: Forged tx rejected at gossip (SEC-H5)"
+        run: cargo nextest run --all-targets -E 'test(forged_transaction_should_be_rejected_at_gossip_ingress)'
+
+      - name: "Phase A: Execution failure does not drop batch (SEC-C1)"
+        run: cargo nextest run --all-targets -E 'test(execution_failure_should_not_drop_committed_batch)'
+
+      - name: "Phase A: Snapshot rejects corrupted manifest (SEC-H4)"
+        run: cargo nextest run --all-targets -E 'test(snapshot_import_should_reject_corrupted_manifest)'
+
+      - name: "Phase A: Snapshot rejects path traversal (SEC-H3)"
+        run: cargo nextest run --all-targets -E 'test(snapshot_path_should_reject_parent_traversal)'
+
+      - name: "Phase A: Agent replay rejected (SEC-H11)"
+        run: cargo nextest run --all-targets -E 'test(agent_replay_should_be_rejected_by_idempotency_key)'
+
+      - name: "Phase A: Session capacity enforced (SEC-H10)"
+        run: cargo nextest run --all-targets -E 'test(session_capacity_should_be_enforced)'
+
+      - name: "Phase A: MvHashMap hot-key conflicts preserve validation (SEC-M10)"
+        run: cargo nextest run --all-targets -E 'test(mvhashmap_hot_key_conflicts_should_not_drop_validation_history)'
+
+      # Phase B: Execution-layer safety closure
+      - name: "Phase B: Forged signature rejected (SEC-H1)"
+        run: cargo nextest run --all-targets -E 'test(execution_should_reject_forged_signed_transaction)'
+
+      - name: "Phase B: Sender-pk mismatch rejected (SEC-H1)"
+        run: cargo nextest run --all-targets -E 'test(execution_should_reject_sender_pk_mismatch)'
+
+      - name: "Phase B: Nonce replay rejected (SEC-H2)"
+        run: cargo nextest run --all-targets -E 'test(execution_should_reject_replayed_sequence_number)'
+
+      - name: "Phase B: Expired tx rejected (SEC-H3)"
+        run: cargo nextest run --all-targets -E 'test(execution_should_reject_expired_transaction)'
+
+      - name: "Phase B: Wrong chain_id rejected (SEC-H4)"
+        run: cargo nextest run --all-targets -E 'test(execution_should_reject_wrong_chain_id)'
+
+      - name: "Phase B: Remote proposal with bad tx rejected (SEC-H5/H6)"
+        run: cargo nextest run --all-targets -E 'test(remote_proposal_with_invalid_tx_should_be_rejected)'
+
+      - name: "Phase B: Pending proposals bounded (SEC-M4)"
+        run: cargo nextest run --all-targets -E 'test(pending_proposals_should_be_bounded)'
+
+      - name: "Phase B: Committed buffer backpressure (SEC-M7)"
+        run: cargo nextest run --all-targets -E 'test(committed_buffer_backpressure)'
+
+      # Phase C: Consensus safety
+      - name: "Phase C: DAG equivocation detected (SEC-H7)"
+        run: cargo nextest run --all-targets -E 'test(dag_should_reject_equivocating_certificate_same_origin_round)'
+
+      - name: "Phase C: Wrong epoch rejected (SEC-H8)"
+        run: cargo nextest run --all-targets -E 'test(certificate_verifier_should_reject_wrong_epoch)'
+
+      - name: "Phase C: Untrusted cert insert rejected (SEC-H9)"
+        run: cargo nextest run --all-targets -E 'test(insert_verified_certificate_should_reject_external_untrusted_input)'
+
+      - name: "Phase C: Late anchor recovery (SEC-H10)"
+        run: cargo nextest run --all-targets -E 'test(shoal_should_not_permanently_skip_late_anchor_without_recovery)'
+
+      # Phase D: Sync & snapshot integrity
+      - name: "Phase D: State sync no amplification (SEC-M6)"
+        run: cargo nextest run --all-targets -E 'test(state_sync_should_not_amplify_single_request_across_cluster)'
+
+      - name: "Phase D: Unverified block response rejected (SEC-M7)"
+        run: cargo nextest run --all-targets -E 'test(state_sync_should_reject_unverified_block_response)'
+
+      - name: "Phase D: Tampered snapshot leaves db clean (SEC-M8)"
+        run: cargo nextest run --all-targets -E 'test(snapshot_import_hash_failure_should_not_mutate_database)'
+
+      - name: "Phase D: Snapshot confined to base dir (SEC-M9)"
+        run: cargo nextest run --all-targets -E 'test(snapshot_import_should_be_confined_to_snapshot_base_dir)'
+
+      - name: "Phase D: Prune atomic across CFs (SEC-M11)"
+        run: cargo nextest run --all-targets -E 'test(prune_should_be_atomic_across_column_families)'
+
+      # Phase E: Auth boundaries & capacity
+      - name: "Phase E: Network rate limiter fail-closed (SEC-M14)"
+        run: cargo nextest run --all-targets -E 'test(network_rate_limiter_should_fail_closed_when_bucket_table_is_full)'
+
+      - name: "Phase E: Faucet limiter fail-closed (SEC-M15)"
+        run: cargo nextest run --all-targets -E 'test(faucet_limiter_should_fail_closed_when_address_table_is_full)'
+
+      - name: "Phase E: MCP caller authenticated (SEC-M12)"
+        run: cargo nextest run --all-targets -E 'test(mcp_caller_identity_should_be_authenticated)'
+
+      - name: "Phase E: A2A signature verified (SEC-M13)"
+        run: cargo nextest run --all-targets -E 'test(a2a_message_with_invalid_signature_should_be_rejected)'
+
+      - name: "Phase E: Dead-letter circuit breaker bounded (SEC-M1)"
+        run: cargo nextest run --all-targets -E 'test(dead_letter_circuit_breaker_constant_is_bounded)'
+
+      # Phase F: Determinism & consistency gate
+      - name: "Phase F: State root consistency across nodes (F-5)"
+        run: cargo nextest run --all-targets -E 'test(state_root_consistency_across_nodes)'
+
+      - name: "Phase F: Serial/parallel replay match across nodes (F-5)"
+        run: cargo nextest run --all-targets -E 'test(serial_and_parallel_replay_state_roots_match_across_nodes)'
+
+  # --------------------------------------------------------------------------
+  # Gate 3c: Startup-Readiness Gate (F-1)
+  #
+  # Dedicated blocking job for readiness / health probe correctness.
+  # Ensures nodes never report "ready" when subsystems are degraded.
+  # --------------------------------------------------------------------------
+  startup-readiness:
+    name: Startup-Readiness Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: "Readiness tests (readiness_tests.rs)"
+        run: cargo test -p nexus-test-utils --lib readiness_tests
+
+      - name: "Readiness chaos suite (chaos_readiness_tests.rs)"
+        run: cargo test -p nexus-test-utils --lib chaos_readiness_tests
+
+      - name: "Readiness unit tests (nexus-rpc readiness)"
+        run: cargo test -p nexus-rpc --lib readiness
+
+      - name: "Node lifecycle boot-to-health (lifecycle_tests.rs)"
+        run: cargo test -p nexus-test-utils --lib lifecycle_tests
+
+      - name: "Node E2E boot-to-query (node_e2e_tests.rs)"
+        run: cargo test -p nexus-test-utils --lib node_e2e_tests
+
+  # --------------------------------------------------------------------------
+  # Gate 3d: Epoch-Reconfig Gate (F-1)
+  #
+  # Dedicated blocking job for epoch management and committee rotation.
+  # Ensures reconfiguration is safe across epoch boundaries.
+  # --------------------------------------------------------------------------
+  epoch-reconfig:
+    name: Epoch-Reconfig Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: "Epoch manager lifecycle (epoch_tests.rs)"
+        run: cargo test -p nexus-test-utils --lib epoch_tests
+
+      - name: "Consensus engine epoch advance"
+        run: cargo test -p nexus-consensus --lib epoch
+
+      - name: "Epoch store persistence (nexus-node)"
+        run: cargo test -p nexus-node --lib epoch_store
+
+      - name: "B-1: Epoch stress tests (partition, restart, replay)"
+        run: cargo test -p nexus-test-utils --lib epoch_stress_tests
+
+      - name: "B-2: Governance consistency after recovery"
+        run: cargo test -p nexus-test-utils --lib governance_recovery_tests
+
+  # --------------------------------------------------------------------------
+  # Gate 3d-1: Stake-Weighted Quorum Gate (K-3)
+  #
+  # Validates heterogeneous-stake quorum arithmetic, certificate
+  # building under varied stake distributions, and combined
+  # voo-precision + stake-weighted E2E correctness.
+  # --------------------------------------------------------------------------
+  stake-weighted-quorum:
+    name: Stake-Weighted Quorum Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: "J-8: Stake-weighted quorum property tests"
+        run: cargo test -p nexus-consensus --test fv_proptest j8_
+
+      - name: "J-9: Stake-weighted certificate integration tests"
+        run: cargo test -p nexus-test-utils --lib stake_weighted_cert_tests
+
+      - name: "K-1: Economic foundation E2E tests"
+        run: cargo test -p nexus-test-utils --lib economic_foundation_tests
+
+  # --------------------------------------------------------------------------
+  # Gate 3e: Proof-Surface Gate (F-1)
+  #
+  # Dedicated blocking job for state commitment, Merkle proofs, and
+  # snapshot signing. Ensures the proof surface is sound.
+  # --------------------------------------------------------------------------
+  proof-surface:
+    name: Proof-Surface Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: "Proof roundtrip tests (proof_tests.rs)"
+        run: cargo test -p nexus-test-utils --lib proof_tests
+
+      - name: "Commitment tracker (nexus-storage)"
+        run: cargo test -p nexus-storage --lib commitment
+
+      - name: "Snapshot signing (nexus-node)"
+        run: cargo test -p nexus-node --lib snapshot_signing
+
+      - name: "State proof RPC endpoints (nexus-rpc)"
+        run: cargo test -p nexus-rpc --lib proof
+
+      - name: "C-2: Proof smoke tests (release rehearsal)"
+        run: cargo test -p nexus-test-utils --lib proof_smoke_tests
+
+      - name: "B-3: Epoch→query/proof/snapshot e2e consistency"
+        run: cargo test -p nexus-test-utils --lib epoch_e2e_consistency_tests
+
+  # --------------------------------------------------------------------------
+  # Gate 3b: P5 Recovery Tests (D-4)
+  # --------------------------------------------------------------------------
+  recovery:
+    name: P5 Recovery Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: Run recovery tests
+        run: |
+          cargo test -p nexus-test-utils --lib recovery_tests -- --test-threads=1
+
+  # --------------------------------------------------------------------------
+  # Gate 3j: Cold-Restart Recovery (H-2)
+  #
+  # End-to-end persistence and cold-restart recovery tests.
+  # Validates that DAG certificates and BatchStore batches survive a
+  # simulated crash and can be fully recovered from disk.
+  # --------------------------------------------------------------------------
+  cold-restart-recovery:
+    name: Cold-Restart Recovery Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: "H-1: End-to-end cold restart tests"
+        run: cargo test -p nexus-test-utils --lib cold_restart_tests
+
+      - name: "F-4/G-4: DAG & BatchStore persistence tests"
+        run: cargo test -p nexus-test-utils --lib persistence_tests
+
+  # --------------------------------------------------------------------------
+  # Gate 3h: Capacity Curves / Tier Matrix (D-2)
+  #
+  # Validates that quota tier limits match the Testnet Access Policy,
+  # tier hierarchy invariant holds, and per-class per-tier enforcement
+  # works at exact boundaries.
+  # --------------------------------------------------------------------------
+  capacity-curves:
+    name: Capacity Curves Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: "D-2: Config defaults match access policy"
+        run: cargo test -p nexus-rpc --lib middleware::tests::config_defaults_match_access_policy
+
+      - name: "D-2: Tier hierarchy invariant"
+        run: cargo test -p nexus-rpc --lib middleware::tests::tier_hierarchy_invariant
+
+      - name: "D-2: Capacity curve exact boundary (3×3 matrix)"
+        run: cargo test -p nexus-rpc --lib middleware::tests::capacity_curve_exact_boundary
+
+      - name: "D-2: Cross-class independence under load"
+        run: cargo test -p nexus-rpc --lib middleware::tests::cross_class_independence
+
+      - name: "D-2: Fail-closed at capacity"
+        run: cargo test -p nexus-rpc --lib middleware::tests::quota_manager_fail_closed_at_capacity
+
+      - name: "D-2: Multi-IP capacity curve"
+        run: cargo test -p nexus-rpc --lib middleware::tests::multi_ip_capacity_curve
+
+  # --------------------------------------------------------------------------
+  # Gate 3f: Config-Doc Drift Check (E-1)
+  #
+  # Ensures RpcConfig defaults in code stay in sync with the
+  # documented values in Docs/Ops/Testnet_Access_Policy.md.
+  # --------------------------------------------------------------------------
+  config-drift:
+    name: Config-Doc Drift Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: "Check config-doc drift"
+        run: zsh scripts/config-doc-drift-check.sh
+
+  # --------------------------------------------------------------------------
+  # Gate 3g: Gas Calibration Gate (D-1)
+  #
+  # Ensures gas budget, schedule, and timeout defaults are calibrated
+  # against representative contract workload sizes.
+  # --------------------------------------------------------------------------
+  gas-calibration:
+    name: Gas Calibration Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: "D-1: Gas budget calibration tests"
+        run: cargo test -p nexus-execution --lib gas_calibration
+
+  # --------------------------------------------------------------------------
+  # Gate 3i: Release Go/No-Go Automation (E-2)
+  #
+  # Automated pre-release checklist that maps Testnet_Release_Runbook §5
+  # go/no-go criteria to executable checks.
+  # --------------------------------------------------------------------------
+  release-go-nogo:
+    name: Release Go/No-Go Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [lint, security, test, test-vm, correctness-negative, startup-readiness, epoch-reconfig, stake-weighted-quorum, proof-surface, config-drift, gas-calibration, capacity-curves, cold-restart-recovery]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+          components: clippy
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev jq
+
+      - name: Install audit tools
+        run: cargo install cargo-audit --locked
+
+      - name: "E-2: Run go/no-go checklist"
+        run: zsh scripts/release-go-nogo.sh --json
+
+  # --------------------------------------------------------------------------
+  # Gate 4: Code Coverage (llvm-cov)
+  # --------------------------------------------------------------------------
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --locked
+
+      - name: Generate coverage report
+        run: |
+          cargo llvm-cov --workspace \
+            --lcov --output-path lcov.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # --------------------------------------------------------------------------
+  # Gate 5: Crypto KAT (Known Answer Tests — NIST vectors)
+  # --------------------------------------------------------------------------
+  crypto-kat:
+    name: Crypto KAT
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: Run ignored crypto tests (KAT vectors)
+        run: |
+          cargo test \
+            -- --ignored --test-threads=1
+
+  # --------------------------------------------------------------------------
+  # Workspace check (all features compile)
+  # --------------------------------------------------------------------------
+  check:
+    name: Workspace Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: Cargo check (workspace)
+        run: cargo check --workspace --all-targets
+
+  # --------------------------------------------------------------------------
+  # Gate: Formal Verification (FV-7)
+  #
+  # Runs all property tests, differential corpus tests, and formal
+  # verification harnesses across consensus, intent, and execution.
+  # --------------------------------------------------------------------------
+  formal-verification:
+    name: Formal Verification Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [test]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: "FV-1: Differential corpus auto-runner (18 harnesses)"
+        run: cargo test -p nexus-test-utils --lib fv_diff_
+
+      - name: "FV-5a: Consensus property tests"
+        run: cargo test -p nexus-consensus --test fv_proptest
+
+      - name: "FV-5b: Consensus formal property tests"
+        run: cargo test -p nexus-consensus --test fv_property_tests
+
+      - name: "FV-5c: Intent / Agent-core property tests"
+        run: cargo test -p nexus-intent --test fv_proptest
+
+      - name: "FV-5d: Execution property tests (multi-shard, HTLC, state root)"
+        run: cargo test -p nexus-execution --test fv_proptest
+
+  move-vm-smoke:
+    name: Move VM Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [test, test-vm, check]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev jq
+
+      - name: Validate default move-vm test surface
+        run: |
+          cargo test -p nexus-execution --lib aptos_vm
+          cargo test -p nexus-wallet --test move_cli_integration
+
+      - name: Build release toolchain for smoke scripts
+        run: |
+          cargo build --release -p nexus-node -p nexus-keygen -p nexus-genesis -p nexus-wallet
+
+      - name: Build node image
+        run: docker build -t nexus-node .
+
+      - name: Bootstrap local devnet
+        run: ./scripts/setup-devnet.sh -o devnet -f
+
+      - name: Start local devnet
+        run: docker compose up -d
+
+      - name: Run container smoke test
+        run: ./scripts/smoke-test.sh
+
+      - name: Run contract smoke test
+        run: ./scripts/contract-smoke-test.sh
+
+      - name: Collect container logs on failure
+        if: failure()
+        run: docker compose logs --no-color > docker-compose.log
+
+      - name: Upload container logs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: move-vm-smoke-logs
+          path: docker-compose.log
+
+      - name: Stop local devnet
+        if: always()
+        run: docker compose down -v

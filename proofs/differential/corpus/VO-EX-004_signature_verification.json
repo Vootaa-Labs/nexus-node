@@ -1,0 +1,44 @@
+{
+  "metadata": {
+    "corpus_id": "VO-EX-004_signature_verification",
+    "invariant_id": "FV-CR-001",
+    "description": "Canonical corpus for transaction signature verification — valid sig accepted, tampered rejected",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "sig_valid_ed25519",
+      "description": "Transaction signed with correct Ed25519 key — verification passes",
+      "key_scheme": "Ed25519",
+      "payload_seed": "transfer_100_to_bob",
+      "sign_with_correct_key": true,
+      "expected": {"verification": "pass"}
+    },
+    {
+      "id": "sig_tampered_payload",
+      "description": "Transaction signed, then payload mutated (bit flip) — verification fails",
+      "key_scheme": "Ed25519",
+      "payload_seed": "transfer_100_to_bob",
+      "sign_with_correct_key": true,
+      "tamper": "flip_first_byte_of_payload",
+      "expected": {"verification": "fail"}
+    },
+    {
+      "id": "sig_wrong_key",
+      "description": "Transaction signed with key_A but verified against key_B — rejection",
+      "key_scheme": "Ed25519",
+      "payload_seed": "transfer_200_to_carol",
+      "sign_with_correct_key": false,
+      "expected": {"verification": "fail"}
+    },
+    {
+      "id": "sig_falcon_valid",
+      "description": "Transaction signed with Falcon-512 PQ key — verification passes",
+      "key_scheme": "Falcon512",
+      "payload_seed": "pq_transfer_payload",
+      "sign_with_correct_key": true,
+      "expected": {"verification": "pass"}
+    }
+  ]
+}

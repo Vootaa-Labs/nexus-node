@@ -1,0 +1,56 @@
+# Fuzz Smoke Test — main branch only
+# Quick 30-second fuzzing pass on critical targets.
+
+name: Fuzz
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    name: Fuzz Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Rust nightly (required for cargo-fuzz)
+        uses: dtolnay/rust-toolchain@0f1b44df7e9cbb178d781a242338dfa5e243ad7f # nightly
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Run fuzz targets (30s each)
+        run: |
+          # Discover fuzz targets and run each for 30 seconds.
+          # If no fuzz targets exist yet, skip gracefully.
+          if [ -d "fuzz" ] && [ -f "fuzz/Cargo.toml" ]; then
+            for target in $(cargo fuzz list 2>/dev/null); do
+              echo "::group::Fuzzing $target"
+              cargo +nightly fuzz run "$target" -- \
+                -max_total_time=30 \
+                -jobs=1 || {
+                echo "::error::Fuzz target $target found a crash"
+                exit 1
+              }
+              echo "::endgroup::"
+            done
+          else
+            echo "No fuzz targets found — skipping"
+          fi

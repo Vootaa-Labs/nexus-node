@@ -1,0 +1,47 @@
+{
+  "metadata": {
+    "corpus_id": "VO-AG-004_provenance_tracking",
+    "invariant_id": "FV-AC-006",
+    "description": "Canonical corpus for provenance tracking — every state change traceable to originating envelope",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "prov_single_action",
+      "description": "One agent action produces one state change — provenance link present",
+      "envelopes": [
+        {"envelope_digest_seed": "env_001", "agent_seed": "agent_a", "action": "transfer", "amount": 100}
+      ],
+      "state_changes": [
+        {"change_id": 0, "originating_envelope_digest_seed": "env_001"}
+      ],
+      "expected": {"all_changes_traced": true, "orphan_count": 0}
+    },
+    {
+      "id": "prov_cascade_3_changes",
+      "description": "One envelope triggers 3 state changes — all must trace back",
+      "envelopes": [
+        {"envelope_digest_seed": "env_002", "agent_seed": "agent_b", "action": "batch_transfer", "sub_actions": 3}
+      ],
+      "state_changes": [
+        {"change_id": 0, "originating_envelope_digest_seed": "env_002"},
+        {"change_id": 1, "originating_envelope_digest_seed": "env_002"},
+        {"change_id": 2, "originating_envelope_digest_seed": "env_002"}
+      ],
+      "expected": {"all_changes_traced": true, "orphan_count": 0}
+    },
+    {
+      "id": "prov_orphan_change",
+      "description": "State change with no matching envelope — detected as orphan",
+      "envelopes": [
+        {"envelope_digest_seed": "env_003", "agent_seed": "agent_c", "action": "transfer", "amount": 50}
+      ],
+      "state_changes": [
+        {"change_id": 0, "originating_envelope_digest_seed": "env_003"},
+        {"change_id": 1, "originating_envelope_digest_seed": "env_MISSING"}
+      ],
+      "expected": {"all_changes_traced": false, "orphan_count": 1}
+    }
+  ]
+}

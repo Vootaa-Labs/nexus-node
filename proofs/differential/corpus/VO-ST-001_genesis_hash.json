@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "corpus_id": "VO-ST-001_genesis_hash",
+    "invariant_id": "FV-ST-001",
+    "description": "Canonical corpus for genesis hash reproducibility — same genesis config ⇒ same state root",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "genesis_default_4v",
+      "description": "Default genesis with 4 validators — compute hash twice, must match",
+      "validators": 4,
+      "initial_accounts": [
+        {"seed": "genesis_acct_0", "balance": 1000000},
+        {"seed": "genesis_acct_1", "balance": 1000000},
+        {"seed": "genesis_acct_2", "balance": 1000000},
+        {"seed": "genesis_acct_3", "balance": 1000000}
+      ],
+      "chain_id": 1,
+      "expected": {"hash_deterministic": true, "repetitions": 3}
+    },
+    {
+      "id": "genesis_different_balance",
+      "description": "Alter one account balance — genesis hash must differ from default",
+      "validators": 4,
+      "initial_accounts": [
+        {"seed": "genesis_acct_0", "balance": 999999},
+        {"seed": "genesis_acct_1", "balance": 1000000},
+        {"seed": "genesis_acct_2", "balance": 1000000},
+        {"seed": "genesis_acct_3", "balance": 1000000}
+      ],
+      "chain_id": 1,
+      "expected": {"differs_from": "genesis_default_4v"}
+    },
+    {
+      "id": "genesis_different_chain_id",
+      "description": "Same accounts but chain_id=2 — genesis hash must differ",
+      "validators": 4,
+      "initial_accounts": [
+        {"seed": "genesis_acct_0", "balance": 1000000},
+        {"seed": "genesis_acct_1", "balance": 1000000},
+        {"seed": "genesis_acct_2", "balance": 1000000},
+        {"seed": "genesis_acct_3", "balance": 1000000}
+      ],
+      "chain_id": 2,
+      "expected": {"differs_from": "genesis_default_4v"}
+    }
+  ]
+}

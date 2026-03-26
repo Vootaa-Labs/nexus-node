@@ -1,0 +1,66 @@
+{
+  "metadata": {
+    "corpus_id": "VO-EX-003_state_transition",
+    "invariant_id": "FV-EX-002",
+    "description": "Canonical corpus for state transition validity — balances correctly updated, no negative amounts",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "st_basic_transfer",
+      "description": "A has 1000, transfers 300 to B — A=700, B=300",
+      "pre_state": [
+        {"account_seed": "addr_A", "balance": 1000},
+        {"account_seed": "addr_B", "balance": 0}
+      ],
+      "transaction": {
+        "type": "Transfer",
+        "sender_seed": "addr_A",
+        "recipient_seed": "addr_B",
+        "amount": 300
+      },
+      "expected_post_state": [
+        {"account_seed": "addr_A", "balance": 700},
+        {"account_seed": "addr_B", "balance": 300}
+      ],
+      "expected_status": "Success"
+    },
+    {
+      "id": "st_insufficient_balance",
+      "description": "A has 100, tries to transfer 200 — transaction fails, balances unchanged",
+      "pre_state": [
+        {"account_seed": "addr_A", "balance": 100},
+        {"account_seed": "addr_B", "balance": 50}
+      ],
+      "transaction": {
+        "type": "Transfer",
+        "sender_seed": "addr_A",
+        "recipient_seed": "addr_B",
+        "amount": 200
+      },
+      "expected_post_state": [
+        {"account_seed": "addr_A", "balance": 100},
+        {"account_seed": "addr_B", "balance": 50}
+      ],
+      "expected_status": "MoveAbort"
+    },
+    {
+      "id": "st_self_transfer",
+      "description": "A transfers 50 to self — balance unchanged (minus gas if applicable)",
+      "pre_state": [
+        {"account_seed": "addr_A", "balance": 500}
+      ],
+      "transaction": {
+        "type": "Transfer",
+        "sender_seed": "addr_A",
+        "recipient_seed": "addr_A",
+        "amount": 50
+      },
+      "expected_post_state": [
+        {"account_seed": "addr_A", "balance": 500}
+      ],
+      "expected_status": "Success"
+    }
+  ]
+}

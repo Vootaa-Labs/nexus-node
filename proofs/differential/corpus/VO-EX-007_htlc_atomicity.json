@@ -1,0 +1,59 @@
+{
+  "metadata": {
+    "corpus_id": "VO-EX-007_htlc_atomicity",
+    "invariant_id": "FV-EX-004",
+    "description": "Canonical corpus for HTLC atomicity — claim or refund, never both, never lost",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "htlc_claim_before_timeout",
+      "description": "Preimage revealed before timeout — recipient claims, sender balance debited",
+      "sender_seed": "alice",
+      "recipient_seed": "bob",
+      "amount": 500,
+      "hash_lock_seed": "secret_preimage_42",
+      "timeout_round": 100,
+      "current_round": 50,
+      "action": "reveal_preimage",
+      "expected": {
+        "outcome": "claimed",
+        "sender_delta": -500,
+        "recipient_delta": 500
+      }
+    },
+    {
+      "id": "htlc_timeout_refund",
+      "description": "Timeout reached, no preimage — sender reclaims funds",
+      "sender_seed": "alice",
+      "recipient_seed": "bob",
+      "amount": 500,
+      "hash_lock_seed": "secret_preimage_42",
+      "timeout_round": 100,
+      "current_round": 101,
+      "action": "refund",
+      "expected": {
+        "outcome": "refunded",
+        "sender_delta": 0,
+        "recipient_delta": 0
+      }
+    },
+    {
+      "id": "htlc_wrong_preimage",
+      "description": "Wrong preimage submitted before timeout — claim rejected, funds locked",
+      "sender_seed": "alice",
+      "recipient_seed": "bob",
+      "amount": 500,
+      "hash_lock_seed": "secret_preimage_42",
+      "wrong_preimage_seed": "wrong_guess_99",
+      "timeout_round": 100,
+      "current_round": 50,
+      "action": "reveal_wrong_preimage",
+      "expected": {
+        "outcome": "rejected",
+        "funds_still_locked": true
+      }
+    }
+  ]
+}

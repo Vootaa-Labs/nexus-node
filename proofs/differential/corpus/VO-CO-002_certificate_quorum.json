@@ -1,0 +1,67 @@
+{
+  "metadata": {
+    "corpus_id": "VO-CO-002_certificate_quorum",
+    "invariant_id": "FV-CO-006",
+    "description": "Canonical corpus for verifying certificate quorum threshold — 2f+1 signatures required",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "quorum_exact_threshold_4v",
+      "description": "4 validators (f=1), certificate with exactly 3 signatures (2f+1) — quorum met",
+      "validators": 4,
+      "f": 1,
+      "threshold": 3,
+      "certificate": {
+        "origin": 0,
+        "round": 1,
+        "batch_digest_seed": "q4_exact",
+        "signers": [0, 1, 2]
+      },
+      "expected": {"quorum_met": true}
+    },
+    {
+      "id": "quorum_below_threshold_4v",
+      "description": "4 validators (f=1), certificate with only 2 signatures — quorum NOT met",
+      "validators": 4,
+      "f": 1,
+      "threshold": 3,
+      "certificate": {
+        "origin": 0,
+        "round": 1,
+        "batch_digest_seed": "q4_below",
+        "signers": [0, 1]
+      },
+      "expected": {"quorum_met": false}
+    },
+    {
+      "id": "quorum_full_7v",
+      "description": "7 validators (f=2), all 7 sign — supermajority",
+      "validators": 7,
+      "f": 2,
+      "threshold": 5,
+      "certificate": {
+        "origin": 3,
+        "round": 5,
+        "batch_digest_seed": "q7_full",
+        "signers": [0, 1, 2, 3, 4, 5, 6]
+      },
+      "expected": {"quorum_met": true}
+    },
+    {
+      "id": "quorum_single_validator",
+      "description": "1 validator (f=0), self-sign — trivial quorum",
+      "validators": 1,
+      "f": 0,
+      "threshold": 1,
+      "certificate": {
+        "origin": 0,
+        "round": 0,
+        "batch_digest_seed": "q1_self",
+        "signers": [0]
+      },
+      "expected": {"quorum_met": true}
+    }
+  ]
+}

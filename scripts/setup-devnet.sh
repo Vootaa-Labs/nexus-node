@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────
+# setup-devnet.sh — One-shot devnet bootstrapping script for Nexus.
+#
+# Generates validator key bundles, genesis configuration, per-node
+# node.toml configs, and the directory layout required by docker-compose.
+#
+# Usage:
+#   ./scripts/setup-devnet.sh [OPTIONS]
+#
+# Options:
+#   -n NUM_VALIDATORS  Number of validators (default: 7, min: 4)
+#   -c CHAIN_ID        Chain identifier (default: nexus-devnet-1)
+#   -s NUM_SHARDS      Number of execution shards (default: 1)
+#   -o OUTPUT_DIR      Output directory (default: ./devnet-n7s)
+#   -f                 Force overwrite existing output directory
+#   -h                 Show this help message
+#
+# Prerequisites:
+#   - cargo must be installed (Rust toolchain)
+#   - Or: nexus-keygen and nexus-genesis binaries on PATH
+# ─────────────────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+# ── Defaults ─────────────────────────────────────────────────────────────
+NUM_VALIDATORS=7
+CHAIN_ID="nexus-devnet-1"
+NUM_SHARDS=1
+OUTPUT_DIR="./devnet-n7s"
+FORCE=false
+
+# ── Parse arguments ──────────────────────────────────────────────────────
+usage() {
+    sed -n '/^# Usage:/,/^# ─/p' "$0" | head -n -1 | sed 's/^# //'
+    exit "${1:-0}"
+}
+
+while getopts "n:c:s:o:fh" opt; do
+    case "$opt" in
+        n) NUM_VALIDATORS="$OPTARG" ;;
+        c) CHAIN_ID="$OPTARG" ;;
+        s) NUM_SHARDS="$OPTARG" ;;
+        o) OUTPUT_DIR="$OPTARG" ;;
+        f) FORCE=true ;;
+        h) usage 0 ;;
+        *) usage 1 ;;
+    esac
+done
+
+# ── Validation ───────────────────────────────────────────────────────────
+if [ "$NUM_VALIDATORS" -lt 4 ]; then
+    echo "Error: BFT requires at least 4 validators (got $NUM_VALIDATORS)" >&2
+    exit 1
+fi
+
+if [ -d "$OUTPUT_DIR" ] && [ "$FORCE" = false ]; then
+    echo "Error: output directory already exists: $OUTPUT_DIR" >&2
+    echo "  Use -f to force overwrite." >&2
+    exit 1
+fi
+
+# ── Build and locate local tools ────────────────────────────────────────
+echo "Building nexus-keygen and nexus-genesis..."
+cargo build --release -p nexus-keygen -p nexus-genesis
+
+KEYGEN="./target/release/nexus-keygen"
+GENESIS="./target/release/nexus-genesis"
+
+echo "Using keygen: $KEYGEN"
+echo "Using genesis: $GENESIS"
+
+# ── Create directory layout ──────────────────────────────────────────────
+if [ "$FORCE" = true ] && [ -d "$OUTPUT_DIR" ]; then
+    rm -rf "$OUTPUT_DIR"
+fi
+
+mkdir -p "$OUTPUT_DIR"
+
+# Base ports for each validator.
+REST_BASE_PORT=8080
+GRPC_BASE_PORT=9090
+P2P_BASE_PORT=7000
+DEVNET_SUBNET_PREFIX="172.28.0"
+DEVNET_IP_BASE=10
+
+# ── Step 1: Generate validator key bundles + network identity keys ────────
+echo ""
+echo "=== Step 1: Generating $NUM_VALIDATORS validator key bundles ==="
+
+KEY_BUNDLE_ARGS=()
+declare -a PEER_IDS
+for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
+    VALIDATOR_DIR="$OUTPUT_DIR/validator-$i/keys"
+    mkdir -p "$VALIDATOR_DIR"
+    $KEYGEN validator --output-dir "$VALIDATOR_DIR" --force
+
+    # Generate libp2p Ed25519 network identity key and capture PeerId.
+    PEER_ID=$($KEYGEN identity --output-dir "$VALIDATOR_DIR" --force)
+    PEER_IDS[$i]="$PEER_ID"
+
+    KEY_BUNDLE_ARGS+=("--validator-keys" "$VALIDATOR_DIR/validator-public-keys.json")
+    echo "  validator-$i keys generated (peer_id=${PEER_ID:0:16}...)"
+done
+
+# ── Step 2: Generate genesis configuration ───────────────────────────────
+echo ""
+echo "=== Step 2: Generating genesis configuration ==="
+
+GENESIS_PATH="$OUTPUT_DIR/genesis.json"
+$GENESIS generate \
+    --chain-id "$CHAIN_ID" \
+    --num-shards "$NUM_SHARDS" \
+    "${KEY_BUNDLE_ARGS[@]}" \
+    $(for i in $(seq 0 $((NUM_VALIDATORS - 1))); do printf '%s %s ' "--network-peer-id" "${PEER_IDS[$i]}"; done) \
+    --output "$GENESIS_PATH" \
+    --force
+
+echo "  genesis: $GENESIS_PATH"
+
+# ── Step 3: Generate per-node configuration and directory layout ─────────
+echo ""
+echo "=== Step 3: Generating per-node configurations ==="
+
+# Build bootstrap peer multiaddresses (QUIC transport + PeerId).
+BOOT_PEERS=""
+for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
+    P2P_PORT=$((P2P_BASE_PORT + i))
+    NODE_IP="${DEVNET_SUBNET_PREFIX}.$((DEVNET_IP_BASE + i))"
+    if [ -n "$BOOT_PEERS" ]; then
+        BOOT_PEERS="$BOOT_PEERS,"
+    fi
+    BOOT_PEERS="$BOOT_PEERS\"/ip4/$NODE_IP/udp/$P2P_PORT/quic-v1/p2p/${PEER_IDS[$i]}\""
+done
+
+for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
+    NODE_DIR="$OUTPUT_DIR/validator-$i"
+    CONFIG_DIR="$NODE_DIR/config"
+    DATA_DIR="$NODE_DIR/data"
+
+    mkdir -p "$CONFIG_DIR" "$DATA_DIR"
+
+    # Copy genesis into each node's config directory.
+    cp "$GENESIS_PATH" "$CONFIG_DIR/genesis.json"
+
+    REST_PORT=$((REST_BASE_PORT + i))
+    GRPC_PORT=$((GRPC_BASE_PORT + i))
+    P2P_PORT=$((P2P_BASE_PORT + i))
+
+    # Generate node.toml
+    cat > "$CONFIG_DIR/node.toml" <<TOML
+# Nexus node configuration — validator-$i
+# Auto-generated by setup-devnet.sh
+
+genesis_path = "/nexus/config/genesis.json"
+validator_key_path = "/nexus/keys"
+
+[network]
+listen_addr = "0.0.0.0:$P2P_PORT"
+boot_nodes = [$BOOT_PEERS]
+identity_key_path = "/nexus/keys/identity.key"
+
+[storage]
+rocksdb_path = "/nexus/data/db"
+
+[consensus]
+epoch_length_rounds = 1000
+
+[execution]
+shard_count = $NUM_SHARDS
+
+[rpc]
+reverse_proxy_tls = true
+rest_listen_addr = "0.0.0.0:$REST_PORT"
+grpc_listen_addr = "0.0.0.0:$GRPC_PORT"
+faucet_enabled = true
+faucet_per_addr_limit_per_hour = 10
+# cors_allowed_origins = ["https://explorer.nexus.dev"]  # uncomment for public testnet
+# api_keys = ["<generate-a-strong-random-key>"]           # uncomment for public testnet
+
+[telemetry]
+log_level = "info"
+TOML
+
+    echo "  validator-$i: config=$CONFIG_DIR/node.toml, data=$DATA_DIR"
+done
+
+# ── Step 4: Generate the shared genesis hash for reference ───────────────
+echo ""
+echo "=== Step 4: Validating genesis ==="
+$GENESIS validate --input "$GENESIS_PATH"
+
+# ── Summary ──────────────────────────────────────────────────────────────
+echo ""
+echo "=== Devnet Setup Complete ==="
+echo ""
+echo "  Chain ID:     $CHAIN_ID"
+echo "  Validators:   $NUM_VALIDATORS"
+echo "  Shards:       $NUM_SHARDS"
+echo "  Output:       $OUTPUT_DIR"
+echo ""
+echo "Directory layout:"
+echo "  $OUTPUT_DIR/"
+echo "    genesis.json                ← shared genesis"
+for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
+    echo "    validator-$i/"
+    echo "      config/node.toml        ← node config"
+    echo "      config/genesis.json     ← genesis copy"
+    echo "      keys/                   ← validator key bundle"
+    echo "      data/                   ← persistent state (empty)"
+done
+# ── Step 5: Generate docker-compose.yml ──────────────────────────────
+echo ""
+echo "=== Step 5: Generating docker-compose.yml ==="
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMPOSE_OUTPUT="$(dirname "$OUTPUT_DIR")/docker-compose.yml"
+COMPOSE_DEVNET_DIR="./$(basename "$OUTPUT_DIR")"
+"$SCRIPT_DIR/generate-compose.sh" -n "$NUM_VALIDATORS" -o "$COMPOSE_OUTPUT" -d "$COMPOSE_DEVNET_DIR"
+
+echo ""
+echo "Next: use docker-compose to launch the devnet."

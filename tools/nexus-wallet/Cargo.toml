@@ -1,0 +1,34 @@
+[package]
+name         = "nexus-wallet"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+description  = "Developer wallet CLI for Nexus — wallet, contract, and Move operations."
+
+[[bin]]
+name = "nexus-wallet"
+path = "src/main.rs"
+
+[dependencies]
+nexus-primitives = { workspace = true }
+nexus-crypto     = { workspace = true }
+nexus-execution  = { workspace = true }
+nexus-intent     = { workspace = true }
+nexus-config     = { workspace = true }
+clap             = { workspace = true }
+serde            = { workspace = true }
+serde_json       = { workspace = true }
+toml             = { workspace = true }
+blake3           = { workspace = true }
+bcs              = { workspace = true }
+hex              = { workspace = true }
+thiserror        = { workspace = true }
+anyhow           = { workspace = true }
+tracing          = { workspace = true }
+tracing-subscriber = { workspace = true }
+ureq             = { workspace = true }
+nexus-move-package = { workspace = true, features = ["native-compile"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }

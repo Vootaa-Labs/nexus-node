@@ -1,0 +1,126 @@
+name: Deploy Testnet
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target GitHub environment"
+        required: true
+        type: choice
+        options:
+          - staging-testnet
+          - public-testnet
+      deploy_ref:
+        description: "Git ref to deploy"
+        required: false
+        default: "main"
+      compose_dir:
+        description: "Remote directory containing docker-compose.yml"
+        required: false
+        default: "/opt/nexus"
+      ssh_port:
+        description: "SSH port of the deployment host"
+        required: false
+        default: "22"
+      healthcheck_url:
+        description: "HTTP readiness URL checked after deployment"
+        required: false
+        default: "http://127.0.0.1:8080/ready"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/nexus-node
+
+concurrency:
+  group: deploy-testnet-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    name: Build And Push Image
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      image_ref: ${{ steps.meta.outputs.image_ref }}
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.deploy_ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image metadata
+        id: meta
+        run: |
+          TAG="testnet-${GITHUB_SHA}"
+          IMAGE_REF="${REGISTRY}/${IMAGE_NAME}:${TAG}"
+          echo "image_ref=${IMAGE_REF}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image_ref }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.environment }}-latest
+
+  deploy:
+    name: Deploy To Testnet Host
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Deploy image over SSH
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.TESTNET_DEPLOY_HOST }}
+          username: ${{ secrets.TESTNET_DEPLOY_USER }}
+          key: ${{ secrets.TESTNET_SSH_PRIVATE_KEY }}
+          port: ${{ inputs.ssh_port }}
+          script_stop: true
+          envs: IMAGE_REF,COMPOSE_DIR,HEALTHCHECK_URL,GHCR_USERNAME,GHCR_TOKEN
+          script: |
+            set -euo pipefail
+            cd "${COMPOSE_DIR}"
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+            export NEXUS_IMAGE="${IMAGE_REF}"
+            docker compose pull
+            docker compose up -d --remove-orphans
+            if command -v curl >/dev/null 2>&1; then
+              health_check() { curl -fsS "${HEALTHCHECK_URL}" >/dev/null; }
+            elif command -v wget >/dev/null 2>&1; then
+              health_check() { wget -qO- "${HEALTHCHECK_URL}" >/dev/null; }
+            else
+              echo "Neither curl nor wget is installed on the deployment host" >&2
+              exit 1
+            fi
+            for attempt in $(seq 1 30); do
+              if health_check; then
+                echo "Deployment healthy"
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "Deployment failed health check" >&2
+            docker compose ps >&2
+            exit 1
+        env:
+          IMAGE_REF: ${{ needs.build-and-push.outputs.image_ref }}
+          COMPOSE_DIR: ${{ inputs.compose_dir }}
+          HEALTHCHECK_URL: ${{ inputs.healthcheck_url }}
+          GHCR_USERNAME: ${{ secrets.TESTNET_GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.TESTNET_GHCR_TOKEN }}

@@ -1,0 +1,56 @@
+{
+  "metadata": {
+    "corpus_id": "VO-ST-004_bcs_roundtrip",
+    "invariant_id": "FV-ST-002",
+    "description": "Canonical corpus for BCS serialisation round-trip — encode then decode ⇒ original value",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "bcs_transaction_body",
+      "description": "TransactionBody round-trip: Transfer 100 tokens",
+      "type_name": "TransactionBody",
+      "value": {
+        "sender_seed": "bcs_alice",
+        "payload": {"type": "Transfer", "recipient_seed": "bcs_bob", "amount": 100},
+        "max_gas": 50000,
+        "gas_price": 1,
+        "nonce": 7,
+        "expiration_round": 200
+      },
+      "expected": {"roundtrip_equal": true}
+    },
+    {
+      "id": "bcs_signed_transaction",
+      "description": "SignedTransaction round-trip with Ed25519 signature",
+      "type_name": "SignedTransaction",
+      "value": {
+        "body_seed": "bcs_tx_body_1",
+        "signature_scheme": "Ed25519"
+      },
+      "expected": {"roundtrip_equal": true}
+    },
+    {
+      "id": "bcs_execution_receipt",
+      "description": "TransactionReceipt round-trip — Success status with state changes",
+      "type_name": "TransactionReceipt",
+      "value": {
+        "tx_hash_seed": "bcs_receipt_tx",
+        "status": "Success",
+        "gas_used": 12345,
+        "state_changes": [
+          {"column_family": "Accounts", "key_seed": "acct_key_1", "op": "Put", "value_seed": "new_balance"}
+        ]
+      },
+      "expected": {"roundtrip_equal": true}
+    },
+    {
+      "id": "bcs_empty_vec",
+      "description": "Empty Vec<StateChange> round-trip — edge case for zero-length sequences",
+      "type_name": "Vec<StateChange>",
+      "value": [],
+      "expected": {"roundtrip_equal": true}
+    }
+  ]
+}

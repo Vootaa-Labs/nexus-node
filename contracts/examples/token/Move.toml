@@ -1,0 +1,11 @@
+[package]
+name = "token"
+version = "1.0.0"
+upgrade_policy = "immutable"
+
+[addresses]
+token_addr = "_"
+std = "0x1"
+
+[dev-addresses]
+token_addr = "0xCAFE"

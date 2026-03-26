@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "corpus_id": "VO-CO-008_reputation_scoring",
+    "invariant_id": "FV-CO-003",
+    "description": "Canonical corpus for reputation scoring — timely certificates boost score, absent validators penalised",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "rep_all_present",
+      "description": "4 validators, 3 rounds, all present — everyone score = 3",
+      "validators": 4,
+      "rounds": 3,
+      "presence": [
+        {"validator": 0, "present_rounds": [0, 1, 2]},
+        {"validator": 1, "present_rounds": [0, 1, 2]},
+        {"validator": 2, "present_rounds": [0, 1, 2]},
+        {"validator": 3, "present_rounds": [0, 1, 2]}
+      ],
+      "expected_scores": [3, 3, 3, 3]
+    },
+    {
+      "id": "rep_one_absent",
+      "description": "4 validators, 3 rounds, validator 2 absent all rounds — score = 0",
+      "validators": 4,
+      "rounds": 3,
+      "presence": [
+        {"validator": 0, "present_rounds": [0, 1, 2]},
+        {"validator": 1, "present_rounds": [0, 1, 2]},
+        {"validator": 2, "present_rounds": []},
+        {"validator": 3, "present_rounds": [0, 1, 2]}
+      ],
+      "expected_scores": [3, 3, 0, 3]
+    },
+    {
+      "id": "rep_intermittent",
+      "description": "4 validators, 5 rounds, validator 1 present in even rounds only",
+      "validators": 4,
+      "rounds": 5,
+      "presence": [
+        {"validator": 0, "present_rounds": [0, 1, 2, 3, 4]},
+        {"validator": 1, "present_rounds": [0, 2, 4]},
+        {"validator": 2, "present_rounds": [0, 1, 2, 3, 4]},
+        {"validator": 3, "present_rounds": [0, 1, 2, 3, 4]}
+      ],
+      "expected_scores": [5, 3, 5, 5]
+    }
+  ]
+}

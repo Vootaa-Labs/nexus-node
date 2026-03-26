@@ -1,0 +1,11 @@
+[package]
+name = "multisig"
+version = "1.0.0"
+upgrade_policy = "immutable"
+
+[addresses]
+multisig_addr = "_"
+std = "0x1"
+
+[dev-addresses]
+multisig_addr = "0xCAFE"

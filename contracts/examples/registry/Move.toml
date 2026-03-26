@@ -1,0 +1,11 @@
+[package]
+name = "registry"
+version = "1.0.0"
+upgrade_policy = "immutable"
+
+[addresses]
+registry_addr = "_"
+std = "0x1"
+
+[dev-addresses]
+registry_addr = "0xCAFE"

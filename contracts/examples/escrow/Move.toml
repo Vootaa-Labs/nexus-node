@@ -1,0 +1,11 @@
+[package]
+name = "escrow"
+version = "1.0.0"
+upgrade_policy = "immutable"
+
+[addresses]
+escrow_addr = "_"
+std = "0x1"
+
+[dev-addresses]
+escrow_addr = "0xCAFE"

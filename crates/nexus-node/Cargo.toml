@@ -1,0 +1,47 @@
+[package]
+name         = "nexus-node"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+description  = "Nexus validator node binary — thin assembly crate that wires all subsystems."
+
+[[bin]]
+name = "nexus-node"
+path = "src/main.rs"
+
+[lib]
+name = "nexus_node"
+path = "src/lib.rs"
+
+[dependencies]
+nexus-primitives = { workspace = true }
+nexus-config    = { workspace = true }
+nexus-crypto    = { workspace = true }
+nexus-network   = { workspace = true }
+nexus-storage   = { workspace = true }
+nexus-consensus = { workspace = true }
+nexus-execution = { workspace = true }
+nexus-intent    = { workspace = true }
+nexus-rpc       = { workspace = true }
+tokio           = { workspace = true }
+tracing         = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow          = { workspace = true }
+bcs             = { workspace = true }
+serde           = { workspace = true }
+serde_json      = { workspace = true }
+hex             = { workspace = true }
+futures         = { workspace = true }
+libp2p          = { workspace = true }
+parking_lot     = { workspace = true }
+dashmap         = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+metrics          = { workspace = true }
+blake3           = { workspace = true }
+thiserror        = { workspace = true }
+
+[dev-dependencies]
+bcs             = { workspace = true }
+tempfile        = { workspace = true }
+tokio           = { workspace = true, features = ["macros", "rt-multi-thread"] }

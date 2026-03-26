@@ -1,0 +1,44 @@
+{
+  "metadata": {
+    "corpus_id": "VO-CR-001_domain_tag_uniqueness",
+    "invariant_id": "FV-CR-001",
+    "description": "Canonical corpus for cryptographic domain tag uniqueness — all 10 tags are distinct byte sequences",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "dt_all_unique",
+      "description": "Enumerate all 10 domain tags and verify pairwise inequality (45 pairs)",
+      "domain_tags": [
+        {"name": "BATCH",       "value": "NEXUS-BATCH"},
+        {"name": "CERTIFICATE", "value": "NEXUS-CERTIFICATE"},
+        {"name": "VOTE",        "value": "NEXUS-VOTE"},
+        {"name": "BLOCK",       "value": "NEXUS-BLOCK"},
+        {"name": "TX",          "value": "NEXUS-TX"},
+        {"name": "STATE",       "value": "NEXUS-STATE"},
+        {"name": "ACCOUNT",     "value": "NEXUS-ACCOUNT"},
+        {"name": "INTENT",      "value": "NEXUS-INTENT"},
+        {"name": "SESSION",     "value": "NEXUS-SESSION"},
+        {"name": "AGENT",       "value": "NEXUS-AGENT"}
+      ],
+      "expected": {"all_pairwise_distinct": true, "pair_count": 45}
+    },
+    {
+      "id": "dt_prefix_no_collision",
+      "description": "Verify no tag is a prefix of another — prevents ambiguous parsing",
+      "domain_tags": [
+        "NEXUS-BATCH", "NEXUS-CERTIFICATE", "NEXUS-VOTE",
+        "NEXUS-BLOCK", "NEXUS-TX", "NEXUS-STATE",
+        "NEXUS-ACCOUNT", "NEXUS-INTENT", "NEXUS-SESSION", "NEXUS-AGENT"
+      ],
+      "expected": {"no_prefix_collision": true}
+    },
+    {
+      "id": "dt_hash_distinctness",
+      "description": "Hash(tag || fixed_payload) for each tag — all 10 digests distinct",
+      "fixed_payload_seed": "domain_test_payload",
+      "expected": {"all_10_hashes_distinct": true}
+    }
+  ]
+}

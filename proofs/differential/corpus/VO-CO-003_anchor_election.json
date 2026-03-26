@@ -1,0 +1,36 @@
+{
+  "metadata": {
+    "corpus_id": "VO-CO-003_anchor_election",
+    "invariant_id": "FV-CO-004",
+    "description": "Canonical corpus for anchor election determinism — same round + committee ⇒ same anchor",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "anchor_deterministic_4v",
+      "description": "4 validators, round 2 — anchor = round % n = 2, repeated invocation must return same",
+      "validators": 4,
+      "round": 2,
+      "expected_anchor_index": 2,
+      "repetitions": 5,
+      "expected": {"all_same": true}
+    },
+    {
+      "id": "anchor_wrap_around",
+      "description": "4 validators, round 7 — anchor = 7 % 4 = 3, verifies mod arithmetic",
+      "validators": 4,
+      "round": 7,
+      "expected_anchor_index": 3,
+      "expected": {"all_same": true}
+    },
+    {
+      "id": "anchor_round_zero",
+      "description": "4 validators, round 0 — anchor = 0 % 4 = 0, genesis round edge case",
+      "validators": 4,
+      "round": 0,
+      "expected_anchor_index": 0,
+      "expected": {"all_same": true}
+    }
+  ]
+}

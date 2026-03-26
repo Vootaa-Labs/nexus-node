@@ -1,0 +1,44 @@
+{
+  "metadata": {
+    "corpus_id": "VO-ST-007_key_encoding",
+    "invariant_id": "FV-ST-003",
+    "description": "Canonical corpus for storage key encoding — AccountKey 34 bytes, ResourceKey 66 bytes, no collision",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "key_account_length",
+      "description": "AccountKey = tag(2B) + address(32B) = 34 bytes",
+      "key_type": "AccountKey",
+      "address_seed": "key_enc_alice",
+      "expected": {"encoded_length": 34}
+    },
+    {
+      "id": "key_resource_length",
+      "description": "ResourceKey = tag(2B) + address(32B) + module(32B) = 66 bytes",
+      "key_type": "ResourceKey",
+      "address_seed": "key_enc_alice",
+      "module_seed": "my_module",
+      "expected": {"encoded_length": 66}
+    },
+    {
+      "id": "key_no_collision_different_addresses",
+      "description": "Two different addresses produce different AccountKeys",
+      "keys": [
+        {"type": "AccountKey", "address_seed": "key_enc_alice"},
+        {"type": "AccountKey", "address_seed": "key_enc_bob"}
+      ],
+      "expected": {"keys_equal": false}
+    },
+    {
+      "id": "key_no_cross_type_collision",
+      "description": "AccountKey and ResourceKey with same address prefix do not collide",
+      "keys": [
+        {"type": "AccountKey", "address_seed": "key_enc_carol"},
+        {"type": "ResourceKey", "address_seed": "key_enc_carol", "module_seed": "any"}
+      ],
+      "expected": {"keys_equal": false}
+    }
+  ]
+}

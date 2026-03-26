@@ -1,0 +1,62 @@
+{
+  "metadata": {
+    "corpus_id": "VO-EX-001_block_stm_determinism",
+    "invariant_id": "FV-EX-001",
+    "description": "Canonical corpus for Block-STM re-execution determinism — same transactions ⇒ same state root",
+    "version": "1.0",
+    "created": "2026-03-11"
+  },
+  "scenarios": [
+    {
+      "id": "stm_two_transfers",
+      "description": "Two transfers A→B and C→D in one block — re-execute twice, compare state roots",
+      "block_height": 1,
+      "transactions": [
+        {
+          "type": "Transfer",
+          "sender_seed": "addr_A",
+          "recipient_seed": "addr_B",
+          "amount": 100,
+          "nonce": 0
+        },
+        {
+          "type": "Transfer",
+          "sender_seed": "addr_C",
+          "recipient_seed": "addr_D",
+          "amount": 200,
+          "nonce": 0
+        }
+      ],
+      "expected": {"deterministic": true, "receipts_count": 2}
+    },
+    {
+      "id": "stm_conflicting_senders",
+      "description": "Two transfers from same sender — nonce ordering matters, result must still be deterministic",
+      "block_height": 2,
+      "transactions": [
+        {
+          "type": "Transfer",
+          "sender_seed": "addr_A",
+          "recipient_seed": "addr_B",
+          "amount": 50,
+          "nonce": 0
+        },
+        {
+          "type": "Transfer",
+          "sender_seed": "addr_A",
+          "recipient_seed": "addr_C",
+          "amount": 30,
+          "nonce": 1
+        }
+      ],
+      "expected": {"deterministic": true, "receipts_count": 2}
+    },
+    {
+      "id": "stm_empty_block",
+      "description": "Empty block — state root unchanged, zero receipts",
+      "block_height": 3,
+      "transactions": [],
+      "expected": {"deterministic": true, "receipts_count": 0}
+    }
+  ]
+}

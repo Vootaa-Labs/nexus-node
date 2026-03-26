@@ -1,0 +1,23 @@
+[package]
+name         = "nexus-storage"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+rust-version.workspace = true
+description  = "Persistent key-value storage (RocksDB) and Verkle Tree state layer for Nexus."
+
+[dependencies]
+nexus-primitives = { workspace = true }
+thiserror        = { workspace = true }
+serde            = { workspace = true }
+tracing          = { workspace = true }
+bcs              = { workspace = true }
+tokio            = { workspace = true }
+rocksdb          = { workspace = true }
+blake3           = { workspace = true }
+hex              = { workspace = true }
+
+[dev-dependencies]
+nexus-test-utils = { workspace = true }
+serde_json       = { workspace = true }
+tempfile         = { workspace = true }
