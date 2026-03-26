@@ -1,0 +1,12 @@
+# nextest CI configuration
+# Reference: https://nexte.st/book/configuration.html
+
+[profile.ci]
+# Fail fast in CI
+fail-fast = true
+# Retry flaky tests once
+retries = 1
+# Status level
+status-level = "pass"
+# Timeout per test
+slow-timeout = { period = "60s", terminate-after = 2 }

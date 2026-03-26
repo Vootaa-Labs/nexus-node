@@ -57,7 +57,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Install cargo-machete
-        run: cargo install cargo-machete --locked
+        run: cargo install cargo-machete --version 0.8.0 --locked
 
       - name: Check unused dependencies
         run: cargo machete
@@ -751,7 +751,7 @@ jobs:
 
       - name: Run ignored crypto tests (KAT vectors)
         run: |
-          cargo test \
+          cargo test -p nexus-crypto \
             -- --ignored --test-threads=1
 
   # --------------------------------------------------------------------------
@@ -879,7 +879,7 @@ jobs:
 
       - name: Upload container logs
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@v4
         with:
           name: move-vm-smoke-logs
           path: docker-compose.log

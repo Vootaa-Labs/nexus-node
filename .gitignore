@@ -90,7 +90,8 @@ fuzz/target/
 # ---------------------------------------------------------------------------
 # Local dev config
 # ---------------------------------------------------------------------------
-.config/
+.config/*
+!.config/nextest.toml
 
 # ---------------------------------------------------------------------------
 # GitHub Actions workflows (keep the workflow YAMLs, ignore the rest of .github/)

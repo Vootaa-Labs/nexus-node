@@ -118,7 +118,7 @@ for i in $(seq 1 $((NUM_VALIDATORS - 1))); do
     hostname: nexus-node-${i}
     depends_on:
       nexus-node-0:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ${DEVNET_DIR}/validator-${i}/config:/nexus/config:ro
       - ${DEVNET_DIR}/validator-${i}/keys:/nexus/keys:ro
