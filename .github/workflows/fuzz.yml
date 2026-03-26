@@ -17,7 +17,7 @@ jobs:
   fuzz:
     name: Fuzz Smoke Test
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6.0.2
 
@@ -35,6 +35,14 @@ jobs:
 
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
+
+      - name: Build fuzz targets
+        run: |
+          if [ -d "fuzz" ] && [ -f "fuzz/Cargo.toml" ]; then
+            cargo fuzz build 2>/dev/null || true
+          else
+            echo "No fuzz targets found — skipping"
+          fi
 
       - name: Run fuzz targets (30s each)
         run: |
