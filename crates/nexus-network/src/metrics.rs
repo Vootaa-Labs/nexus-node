@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Network-layer observability counters and gauges.
 //!
 //! All metrics use the [`metrics`] facade crate. The actual exporter

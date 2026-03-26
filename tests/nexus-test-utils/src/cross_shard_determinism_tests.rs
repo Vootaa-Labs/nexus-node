@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! X-3 — Cross-shard determinism tests.
 //!
 //! Validates that independently constructed multi-shard execution

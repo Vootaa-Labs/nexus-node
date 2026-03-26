@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Batch proposer — periodically drains the mempool, builds Narwhal batches,
 //! stores transaction payloads in the [`BatchStore`], and submits proposals
 //! to the [`CertAggregator`](crate::cert_aggregator) for multi-validator

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! GossipSub 1.1 message broadcasting — topic-based publish/subscribe.
 //!
 //! This module implements the [`GossipNetwork`] trait using libp2p GossipSub.

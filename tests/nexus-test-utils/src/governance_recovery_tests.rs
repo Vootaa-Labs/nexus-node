@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! B-2: Governance interface consistency after recovery.
 //!
 //! Verifies that governance actions (slash, advance, history) maintain

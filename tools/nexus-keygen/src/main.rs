@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-keygen` — CLI tool for Nexus validator key generation.
 //!
 //! Generates post-quantum cryptographic key pairs for Nexus validators:

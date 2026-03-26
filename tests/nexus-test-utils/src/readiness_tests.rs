@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Readiness negative tests (v0.1.5 — readiness hardening).
 //!
 //! Verifies that the node health and readiness endpoints report

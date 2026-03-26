@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Deterministic test fixture builders.
 //!
 //! Sub-modules provide factory functions that produce reproducible test

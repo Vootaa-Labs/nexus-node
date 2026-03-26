@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! ExecutionService — async actor for processing committed batches.
 //!
 //! Bridges the consensus layer (which delivers [`CommittedBatch`] sequences)

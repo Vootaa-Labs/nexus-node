@@ -63,6 +63,7 @@ nexus-intent     = { path = "crates/nexus-intent" }
 nexus-rpc        = { path = "crates/nexus-rpc" }
 nexus-config     = { path = "crates/nexus-config" }
 nexus-node       = { path = "crates/nexus-node" }
+nexus-wallet     = { path = "tools/nexus-wallet" }
 nexus-test-utils = { path = "tests/nexus-test-utils" }
 
 # --- nexus-move crates (stable facade consumption, FORMAL-03 §11) -------------

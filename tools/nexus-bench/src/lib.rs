@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-bench` — Criterion micro-benchmark suite for Nexus hot paths.
 //!
 //! Benchmarks must be run with `cargo bench` from the workspace root.

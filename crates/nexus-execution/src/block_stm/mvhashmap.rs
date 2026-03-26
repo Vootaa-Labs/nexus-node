@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Production-grade Multi-Version HashMap for Block-STM MVCC.
 //!
 //! [`MvHashMap`] is a thread-safe, concurrent multi-version data structure

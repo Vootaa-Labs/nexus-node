@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Core cryptographic trait definitions.
 //!
 //! These traits define the **FROZEN-2** interface contracts for all

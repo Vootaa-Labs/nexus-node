@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Policy enforcement — human confirmation gates and value/contract rules.
 //!
 //! Absorbs and extends the logic from the legacy `agent/capability.rs`

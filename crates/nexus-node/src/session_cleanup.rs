@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Background cleanup task for expired sessions and old provenance records.
 //!
 //! Runs on a configurable interval, removing:

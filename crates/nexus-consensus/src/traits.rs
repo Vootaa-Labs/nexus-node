@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Consensus trait contracts.
 //!
 //! These traits define the sealed interfaces for the consensus layer.

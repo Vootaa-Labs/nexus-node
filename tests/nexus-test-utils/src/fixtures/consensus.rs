@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Consensus test fixtures.
 //!
 //! Provides helpers for building committees, certificates, and DAGs

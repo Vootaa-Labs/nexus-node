@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! [`MemoryStore`] — in-memory implementation of [`StateStorage`] for testing.
 //!
 //! Backed by `BTreeMap` for deterministic iteration order.

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Disjoint-path DHT lookup for Eclipse attack mitigation.
 //!
 //! Implements the S/Kademlia 2-path disjoint lookup algorithm:

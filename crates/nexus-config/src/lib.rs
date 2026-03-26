@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-config` — Configuration parsing and validation for Nexus.
 //!
 //! Loads validator configuration from TOML files and environment variable

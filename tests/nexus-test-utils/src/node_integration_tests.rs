@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Phase 5 integration tests — cross-module validation.
 //!
 //! These tests verify the integration surface between multiple subsystems

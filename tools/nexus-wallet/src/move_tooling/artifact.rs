@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Nexus Move package artifact generation.
 //!
 //! After `aptos move compile` produces the standard build output, this

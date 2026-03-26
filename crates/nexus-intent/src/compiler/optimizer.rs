@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Route optimizer — Dijkstra-based cross-shard cost minimisation.
 //!
 //! When an intent touches multiple shards, the optimizer computes

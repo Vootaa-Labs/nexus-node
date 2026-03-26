@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Real backend adapters bridging RPC traits to domain crate APIs.
 //!
 //! These replace the Phase 4 stub backends and delegate to the

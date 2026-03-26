@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Post-quantum cryptography benchmarks.
 //!
 //! Measures keygen, sign, and verify throughput for FALCON-512 (consensus)

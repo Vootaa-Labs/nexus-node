@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Per-peer, per-topic token-bucket rate limiter.
 //!
 //! Uses the [`governor`] crate (Generic Cell Rate Algorithm / GCRA) to enforce

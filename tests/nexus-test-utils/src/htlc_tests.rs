@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Phase V / V-8 acceptance tests — Cross-shard HTLC protocol.
 //!
 //! Validates the full HTLC lifecycle:

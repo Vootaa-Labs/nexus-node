@@ -1,3 +1,5 @@
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
 # ─────────────────────────────────────────────────────────────────────────
 # Nexus node — production Dockerfile
 #

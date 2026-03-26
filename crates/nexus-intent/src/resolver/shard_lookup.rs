@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Account shard routing via Jump Consistent Hash.
 //!
 //! Deterministically maps an [`AccountAddress`] to a [`ShardId`] using

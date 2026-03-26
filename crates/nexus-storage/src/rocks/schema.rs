@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! RocksDB column family definitions (**FROZEN-2**).
 //!
 //! All column families are created at DB-open time. Adding or removing

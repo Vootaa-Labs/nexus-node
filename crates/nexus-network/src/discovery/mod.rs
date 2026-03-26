@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! S/Kademlia DHT peer discovery — bootstrap, routing, and peer lookup.
 //!
 //! Implements the [`DhtDiscovery`] trait on top of libp2p's Kademlia,

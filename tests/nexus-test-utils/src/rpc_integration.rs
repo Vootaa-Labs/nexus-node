@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Integration tests for the nexus-rpc HTTP API.
 //!
 //! These tests build the full router via `RpcService::builder()` and exercise

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Agent capability snapshot and delegation chain validation.
 //!
 //! A [`AgentCapabilitySnapshot`] captures the runtime-resolved

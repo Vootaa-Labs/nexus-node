@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! T-7009 — Node lifecycle E2E smoke tests.
 //!
 //! Exercises the full node assembly pipeline from `main.rs` in-process:

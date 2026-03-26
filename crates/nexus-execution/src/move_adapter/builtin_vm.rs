@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Built-in VM implementation.
 //!
 //! [`BuiltinVm`] provides a minimal Move-compatible execution environment

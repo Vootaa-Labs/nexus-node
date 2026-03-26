@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! ML-KEM-768 key encapsulation mechanism (NIST FIPS 203).
 //!
 //! Used for establishing **shared secrets** over untrusted channels

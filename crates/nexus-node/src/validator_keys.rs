@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Validator key loading from persistent key files.
 //!
 //! Loads Falcon-512 signing keys produced by `nexus-keygen validator`.

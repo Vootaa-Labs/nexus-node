@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! FV-5 — Execution property tests.
 //!
 //! Three invariant families:

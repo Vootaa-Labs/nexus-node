@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::artifact;
 use clap::Args;
 use std::path::PathBuf;

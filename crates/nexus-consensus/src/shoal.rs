@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Shoal++ BFT total-order finalization.
 //!
 //! [`ShoalOrderer`] implements [`BftOrderer`], selecting anchors every 2 rounds

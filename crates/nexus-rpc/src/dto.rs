@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Data Transfer Objects for the external API.
 //!
 //! DTOs isolate internal domain types from the public HTTP/JSON surface.

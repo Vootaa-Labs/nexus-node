@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Storage maintenance — periodic metrics collection and data pruning (P5-2 / P5-3).
 //!
 //! Spawns a background task that:

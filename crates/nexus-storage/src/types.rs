@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Core storage types: column family names, key encodings, and write operations.
 //!
 //! All column family names and key formats are **FROZEN-2**:

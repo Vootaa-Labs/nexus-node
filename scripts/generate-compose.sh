@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
 # ─────────────────────────────────────────────────────────────────────────
 # generate-compose.sh — Generate docker-compose.yml for N validators.
 #
@@ -49,6 +51,8 @@ DEVNET_IP_BASE=10
 
 # ── Generate ─────────────────────────────────────────────────────────────
 cat > "$OUTPUT" <<'HEADER'
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
 # ─────────────────────────────────────────────────────────────────────────
 # Nexus Internal Devnet — docker-compose
 #

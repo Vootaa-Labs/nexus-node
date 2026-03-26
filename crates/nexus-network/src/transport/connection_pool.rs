@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Connection pool — tracks peer connection states and handles lifecycle.
 //!
 //! Uses [`DashMap`] for concurrent access from multiple tasks.

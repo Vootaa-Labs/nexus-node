@@ -3497,7 +3497,9 @@ dependencies = [
 name = "nexus-bench"
 version = "0.1.13"
 dependencies = [
+ "anyhow",
  "bcs",
+ "clap",
  "criterion",
  "futures",
  "hex",
@@ -3512,8 +3514,11 @@ dependencies = [
  "nexus-rpc",
  "nexus-storage",
  "nexus-test-utils",
+ "nexus-wallet",
+ "serde",
  "serde_json",
  "tokio",
+ "ureq",
 ]
 
 [[package]]

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Validator discovery — seeds the peer table from genesis and triggers
 //! DHT bootstrap for ongoing peer discovery.
 //!

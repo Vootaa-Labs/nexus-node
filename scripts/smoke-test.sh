@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
 # ─────────────────────────────────────────────────────────────────────────
 # smoke-test.sh — Container-level smoke and recovery tests for Nexus devnet.
 #

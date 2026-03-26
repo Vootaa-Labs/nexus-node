@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Intent layer data types.
 //!
 //! Core structures for intent representation, compilation results,

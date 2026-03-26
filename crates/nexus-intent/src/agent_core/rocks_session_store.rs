@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! RocksDB-backed session store for persistent agent sessions.
 //!
 //! Sessions are stored in the `cf_sessions` column family with

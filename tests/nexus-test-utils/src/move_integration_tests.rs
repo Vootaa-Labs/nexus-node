@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Move contract engine integration test matrix (T-11004).
 //!
 //! End-to-end tests covering the full publish → invoke → query pipeline

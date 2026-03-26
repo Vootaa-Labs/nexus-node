@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Message deduplication — LRU cache with Blake3 fingerprints.
 //!
 //! Prevents processing the same GossipSub message twice. Messages are

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! B-3: Epoch→query/proof/snapshot end-to-end consistency.
 //!
 //! Verifies that query results, proof verification, and snapshot state

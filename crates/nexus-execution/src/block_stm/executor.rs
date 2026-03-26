@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Single-transaction execution logic for Block-STM.
 //!
 //! [`execute_single_tx`] runs one transaction against an [`MvOverlay`],

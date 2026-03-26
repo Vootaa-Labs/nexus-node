@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Faucet endpoint — dispense test tokens on devnet.
 //!
 //! `POST /v2/faucet/mint` — mints a fixed amount of native tokens to the

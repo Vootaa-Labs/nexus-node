@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Contract registry — maps [`ContractAddress`] → [`ContractLocation`].
 //!
 //! Provides a concurrent in-memory lookup table for deployed contracts.

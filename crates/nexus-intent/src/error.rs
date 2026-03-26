@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Intent layer error types.
 //!
 //! [`IntentError`] is the unified error enum for the intent layer,

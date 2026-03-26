@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! P5 end-to-end recovery tests.
 //!
 //! Validates snapshot export → import, pruning → query behaviour,

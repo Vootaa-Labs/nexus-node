@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Gas baseline regression tests (T-11005).
 //!
 //! Executes standard transaction types through the Block-STM executor and

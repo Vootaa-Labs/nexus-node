@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Tool chain integration tests — keygen → genesis → node boot.
 //!
 //! Exercises the full operator workflow:

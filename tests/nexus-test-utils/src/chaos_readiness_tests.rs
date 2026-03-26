@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Readiness chaos test suite (v0.1.5 — A-1).
 //!
 //! Exercises the readiness state machine under fault-injection

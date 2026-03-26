@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Move event → Nexus event bridge.
 //!
 //! TLD-09 §7.2: Move events must be normalized to Nexus DTOs before

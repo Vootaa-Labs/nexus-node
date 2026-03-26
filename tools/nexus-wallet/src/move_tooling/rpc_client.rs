@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Lightweight RPC client for submitting transactions to a Nexus node.
 //!
 //! Uses `ureq` (synchronous HTTP) to keep the CLI dependency footprint small.

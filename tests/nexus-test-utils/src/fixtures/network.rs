@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Network-layer test fixtures: peer IDs, messages, configs.
 
 use nexus_crypto::DilithiumSigner;

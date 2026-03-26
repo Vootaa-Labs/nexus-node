@@ -5,6 +5,8 @@ Numbers below are devnet and cluster-visibility proxies, not production chain cl
 
 ## Configuration
 
+- Environment: shared-host Docker devnet
+- Interpretation boundary: results must be read against the shared-host constraint, not as isolated bare-metal capacity
 - Nodes: http://127.0.0.1:8080, http://127.0.0.1:8081, http://127.0.0.1:8082, http://127.0.0.1:8083, http://127.0.0.1:8084, http://127.0.0.1:8085, http://127.0.0.1:8086
 - Worker sweep: [1, 2, 4, 8]
 - Transactions per worker: 10
@@ -23,10 +25,10 @@ Numbers below are devnet and cluster-visibility proxies, not production chain cl
 
 | Workers | Planned TXs | Confirmed Local | Confirmed Cluster | Local TPS | Cluster TPS | Local P50/P95/P99 (ms) | Cluster P50/P95/P99 (ms) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 10 | 10 | 10 | 4.72 | 4.72 | 1452.36/2118.15/2118.15 | 1452.36/2118.15/2118.15 |
-| 2 | 20 | 20 | 20 | 7.48 | 7.48 | 2000.93/2668.36/2671.29 | 2003.69/2668.36/2671.29 |
-| 4 | 40 | 40 | 40 | 11.28 | 11.28 | 2276.96/2309.72/3544.55 | 2280.58/3532.90/3544.55 |
-| 8 | 80 | 2 | 2 | 1.34 | 0.52 | 1361.49/1361.49/1361.49 | 3686.48/3686.48/3686.48 |
+| 1 | 10 | 10 | 10 | 5.56 | 5.56 | 1783.16/1796.57/1796.57 | 1783.16/1796.57/1796.57 |
+| 2 | 20 | 20 | 20 | 6.87 | 6.87 | 2888.16/2904.85/2905.36 | 2888.16/2904.85/2905.36 |
+| 4 | 40 | 40 | 40 | 12.50 | 12.50 | 3175.75/3198.19/3198.91 | 3177.48/3198.19/3198.91 |
+| 8 | 80 | 80 | 80 | 24.13 | 24.13 | 3017.38/3297.13/3314.68 | 3036.61/3306.67/3314.68 |
 
 ## Public Messaging Guidance
 

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! MCP session → ACE session bridge.
 //!
 //! Maps opaque MCP session identifiers (strings from the LLM client)

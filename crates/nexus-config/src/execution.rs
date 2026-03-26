@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Execution engine configuration.
 //!
 //! Parameters for Block-STM parallel execution, sharding, gas limits,

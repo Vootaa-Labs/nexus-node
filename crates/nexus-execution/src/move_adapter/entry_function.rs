@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Entry function dispatch — validates and executes Move function calls.
 //!
 //! TLD-09 §6.1: all contract calls pass through a [`MoveCallRequest`]

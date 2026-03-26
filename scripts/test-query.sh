@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
 
 WALLET=./target/release/nexus-wallet
@@ -43,7 +45,9 @@ $WALLET move call \
 sleep 3
 echo ""
 echo "--- Query get_count ---"
-curl -s -w "\nHTTP %{http_code}\n" \
+curl -s -w "
+HTTP %{http_code}
+" \
   -X POST "$RPC/v2/contract/query" \
   -H "Content-Type: application/json" \
   -d "{\"contract\":\"$ADDR\",\"function\":\"counter::get_count\",\"type_args\":[],\"args\":[\"$ADDR\"]}"

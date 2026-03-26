@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! FV-1 / FV-2 — Differential corpus auto-runner & report generator.
 //!
 //! Reads all 18 JSON corpus files under `proofs/differential/corpus/`,

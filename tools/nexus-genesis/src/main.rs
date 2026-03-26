@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-genesis` — CLI tool for generating the Nexus genesis configuration.
 //!
 //! Produces a signed genesis configuration JSON file given validator public

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Staking snapshot reader — reads on-chain staking state at epoch boundaries.
 //!
 //! At each election boundary the node must derive the next committee from

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! F-3: Fault injection tests for snapshot, proof surface, and query budget.
 //!
 //! Covers three failure domains:

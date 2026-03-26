@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Core network types: peer identity, connection state, topics, wire protocol.
 //!
 //! These types form the vocabulary shared by all network subsystems.

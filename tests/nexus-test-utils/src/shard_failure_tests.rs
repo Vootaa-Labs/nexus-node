@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! X-4 — Failure rollback tests for cross-shard / multi-shard resilience.
 //!
 //! Acceptance criteria from roadmap:

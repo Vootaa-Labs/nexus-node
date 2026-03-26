@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Snapshot manifest signing and verification.
 //!
 //! Provides helpers for signing a [`SnapshotManifest`] with a Falcon-512

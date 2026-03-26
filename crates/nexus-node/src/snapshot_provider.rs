@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Staking snapshot provider — builds a `StakingSnapshot` from committed
 //! chain state at epoch boundaries.
 //!

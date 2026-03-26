@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Execution trait contracts.
 //!
 //! These traits define the boundaries of the execution layer.

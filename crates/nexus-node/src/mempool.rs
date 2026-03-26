@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! In-memory transaction pool for pending transactions.
 //!
 //! The [`Mempool`] stores validated [`SignedTransaction`]s awaiting inclusion

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Epoch → Network bridge — adjusts gossip subscriptions on committee changes.
 //!
 //! When the consensus layer advances to a new epoch with a new committee

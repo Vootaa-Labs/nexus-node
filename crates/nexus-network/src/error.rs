@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Unified error types for the `nexus-network` crate.
 //!
 //! Every network operation returns `Result<T, NetworkError>` — no panics,

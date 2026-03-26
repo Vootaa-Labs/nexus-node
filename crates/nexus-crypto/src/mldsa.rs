@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! ML-DSA-65 digital signature scheme (NIST FIPS 204, Level 3).
 //!
 //! Used for **user transaction** signatures. Provides post-quantum security

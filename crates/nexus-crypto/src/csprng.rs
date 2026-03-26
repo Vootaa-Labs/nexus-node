@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! OS-backed CSPRNG for use with `rand_core 0.10` APIs.
 //!
 //! Provides [`OsRng`] — a zero-sized struct implementing

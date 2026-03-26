@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `address` — derive and display AccountAddress from a key file.
 
 use anyhow::Result;

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Integration tests for the unified `nexus-wallet move ...` developer CLI.
 //!
 //! These tests verify that the wallet entrypoint now exposes the full Move

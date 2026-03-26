@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Devnet scenario tests — integration test suite for live Nexus devnet clusters.
 //!
 //! Migrated from the original `nexus-simulator` one-shot runner. These scenarios

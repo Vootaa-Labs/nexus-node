@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Genesis loading and chain bootstrapping.
 //!
 //! Reads the genesis JSON file, validates it, and seeds the storage

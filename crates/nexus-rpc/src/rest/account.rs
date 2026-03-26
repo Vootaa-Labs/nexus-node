@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Account query endpoints.
 //!
 //! `GET /v2/account/{addr}/balance` — aggregated balance for an account.

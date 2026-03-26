@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Cross-layer E2E & resilience tests (T-13006).
 //!
 //! Exercises the full MCP → ACE → dispatch pipeline with both happy

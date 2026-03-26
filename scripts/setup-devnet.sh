@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
 # ─────────────────────────────────────────────────────────────────────────
 # setup-devnet.sh — One-shot devnet bootstrapping script for Nexus.
 #

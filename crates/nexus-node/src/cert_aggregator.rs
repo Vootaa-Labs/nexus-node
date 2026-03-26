@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Certificate aggregator — collects validator signatures to build
 //! quorum certificates for Narwhal batches.
 //!

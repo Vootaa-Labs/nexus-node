@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Move package metadata — structured contract deployment artifacts.
 //!
 //! Follows TLD-09 §4 package layout specification:

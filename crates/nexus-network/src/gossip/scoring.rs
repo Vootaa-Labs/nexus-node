@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! GossipSub peer scoring parameters — reputation-based relay decisions.
 //!
 //! Defines scoring policies that reward honest message relay and penalize

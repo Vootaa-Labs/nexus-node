@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! S-5: Staking release regression tests.
 //!
 //! End-to-end regression suite verifying the complete lifecycle:

@@ -1,4 +1,6 @@
 #!/usr/bin/env zsh
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
 # ─────────────────────────────────────────────────────────────────────────
 # config-doc-drift-check.sh  (v0.1.5 — E-1)
 #

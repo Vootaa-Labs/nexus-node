@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-storage` — Persistent storage backend for Nexus.
 //!
 //! Provides a typed key-value interface over RocksDB and trait contracts

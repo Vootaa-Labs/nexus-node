@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-crypto` — Safe high-level cryptographic API for Nexus.
 //!
 //! Wraps RustCrypto `ml-dsa`/`ml-kem` (pure Rust) and `pqcrypto-falcon`

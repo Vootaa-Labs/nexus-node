@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! MCP tool-call handler — orchestrates the full MCP→ACE dispatch cycle.
 //!
 //! Receives a raw [`McpToolCall`], validates it against the registry,

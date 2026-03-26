@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! State view bridge for the Move adapter.
 //!
 //! [`NexusStateView`] wraps our [`StateView`](crate::traits::StateView) to

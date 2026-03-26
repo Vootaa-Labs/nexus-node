@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Genesis configuration — initial chain state and validator set.
 //!
 //! [`GenesisConfig`] describes the initial parameters required to bootstrap

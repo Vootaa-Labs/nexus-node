@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! RPC / API gateway configuration.
 //!
 //! Addresses and limits for gRPC, REST, GraphQL, WebSocket, and MCP

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Move module function ABI — describes callable functions in published modules.
 //!
 //! When a module is published, its bytecode is stored along with a serialised

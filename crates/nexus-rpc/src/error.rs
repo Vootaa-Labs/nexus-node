@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! RPC error types.
 //!
 //! Provides a unified error type for the RPC layer that maps domain errors

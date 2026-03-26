@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! E-3: Multi-epoch integration tests.
 //!
 //! Tests covering epoch transitions, committee rotation, cold restart

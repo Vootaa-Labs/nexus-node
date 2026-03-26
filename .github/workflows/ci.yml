@@ -1,3 +1,6 @@
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
+#
 # CI Pipeline — nexus-node v0.1.13
 # Gates: Lint → Security Audit → Tests → Move VM → Security Negative → Recovery → Coverage → Crypto KAT
 # Triggered on every push and PR to main.

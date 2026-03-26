@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Module publisher — contract address derivation and module storage.
 //!
 //! Implements the full module publish flow:

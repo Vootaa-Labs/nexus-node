@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! In-memory DAG data structure for Narwhal certificate storage.
 //!
 //! [`InMemoryDag`] implements [`CertificateDag`] with:

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-wallet` — developer wallet CLI for Nexus.
 //!
 //! Subcommands:

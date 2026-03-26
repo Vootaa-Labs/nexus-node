@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! I-9: Token precision integration tests (VOO-PRECISION).
 //!
 //! Validates that the voo precision switch (1 NXS = 10^9 voo) works

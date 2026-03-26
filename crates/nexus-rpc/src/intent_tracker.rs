@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Intent lifecycle tracker.
 //!
 //! Tracks intents from submission through to on-chain confirmation,

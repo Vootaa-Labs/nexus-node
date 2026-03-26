@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! BLAKE3 Sorted Merkle Tree — first implementation of [`StateCommitment`].
 //!
 //! Uses a sorted map of key→value entries. The commitment root is computed

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Node readiness state machine.
 //!
 //! Tracks the health of each subsystem and derives an aggregate node

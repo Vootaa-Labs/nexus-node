@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! State synchronization foundation — block catch-up protocol.
 //!
 //! **T-7006**: Enables newly joining nodes to request missing committed

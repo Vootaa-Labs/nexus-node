@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Phase N — canonical root unification end-to-end tests.
 //!
 //! Verifies that:

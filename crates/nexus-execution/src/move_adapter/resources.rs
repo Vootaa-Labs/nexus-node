@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Resource read/write bridge for Move contract state.
 //!
 //! TLD-09 §8: each resource type is stored under a structured key at the

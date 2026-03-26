@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Embedded Move standard library modules and native function registration.
 //!
 //! The Move VM requires framework modules (address `0x1`) to be available

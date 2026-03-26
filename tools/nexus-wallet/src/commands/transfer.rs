@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `transfer` — send native tokens from wallet to a recipient.
 
 use anyhow::{Context, Result};

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
 # Nexus local development environment verification.
 # Checks toolchain, components, and cargo tools without modifying anything.
 # Exit code 0 = all checks pass, 1 = something missing.

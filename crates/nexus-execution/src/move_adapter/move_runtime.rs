@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Real Move VM adapter backed by `move-vm-runtime`.
 //!
 //! Feature-gated behind `move-vm`.  When active, [`MoveRuntime`] provides

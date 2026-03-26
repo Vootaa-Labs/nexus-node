@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! QUIC transport configuration and libp2p Swarm construction.
 //!
 //! Builds a production-ready [`Swarm`] with QUIC transport, Noise encryption,

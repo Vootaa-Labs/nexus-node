@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Intent resource parser — extracts accounts, tokens, contracts,
 //! and gas budgets needed to compile a [`UserIntent`].
 //!

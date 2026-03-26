@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Consensus layer benchmarks.
 //!
 //! Measures DAG insertion, certificate construction/verification,

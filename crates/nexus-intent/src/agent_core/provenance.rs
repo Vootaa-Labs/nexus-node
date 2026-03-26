@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Provenance recording and audit query model.
 //!
 //! Every agent-driven execution leaves a [`ProvenanceRecord`] that ties

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! In-memory provenance store with indexed views and activity feed.
 //!
 //! Provides filtered queries by agent, session, capability token,

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! BLAKE3-256 hashing benchmarks.
 //!
 //! Measures one-shot digest, incremental hashing, and Merkle root

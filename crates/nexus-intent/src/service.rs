@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Intent service actor — async message-driven intent processing.
 //!
 //! [`IntentService`] wraps the intent compiler behind a bounded

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Execution test fixtures.
 //!
 //! Helpers for building signed transactions and in-memory state views

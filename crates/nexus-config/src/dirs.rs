@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Container directory contract and validation.
 //!
 //! Defines the standard directory layout for Nexus node deployments,

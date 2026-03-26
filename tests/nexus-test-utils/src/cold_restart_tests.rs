@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! H-1: End-to-end cold restart integration tests.
 //!
 //! These tests exercise the full cold-restart recovery path:

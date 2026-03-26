@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Domain-specific assertion helpers.
 //!
 //! These functions provide clear, consistent error messages for common

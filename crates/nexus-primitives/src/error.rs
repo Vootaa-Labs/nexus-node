@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Crate-level error types for `nexus-primitives`.
 
 use thiserror::Error;

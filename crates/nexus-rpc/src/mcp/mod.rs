@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! MCP Adapter — Model Context Protocol bridge for Nexus.
 //!
 //! **Position**: Adapter-MCP-v1 (thin translation layer per TLD-07 §5).

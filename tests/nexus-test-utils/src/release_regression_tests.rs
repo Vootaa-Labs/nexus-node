@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! X-5 — Pre-release regression tests for multi-shard production gate.
 //!
 //! Validates:

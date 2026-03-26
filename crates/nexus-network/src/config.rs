@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Network service configuration.
 //!
 //! [`NetworkConfig`] captures all tuneable parameters for the P2P layer.

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Canonical agent request envelope.
 //!
 //! [`AgentEnvelope`] is the single entry type for every agent request

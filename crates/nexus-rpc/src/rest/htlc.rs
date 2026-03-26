@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! HTLC lock state REST endpoints (W-5).
 //!
 //! | Method | Path | Description |

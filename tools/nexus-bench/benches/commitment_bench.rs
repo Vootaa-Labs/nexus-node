@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! State commitment benchmarks (Phase O-4).
 //!
 //! Measures incremental insert, root computation, proof generation,

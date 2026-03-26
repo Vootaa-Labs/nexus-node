@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Primitive-level test fixtures: digests, addresses, identifiers.
 
 use nexus_primitives::{

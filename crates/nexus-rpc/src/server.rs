@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `RpcService` — top-level HTTP server lifecycle manager.
 //!
 //! Wires together the REST router, WebSocket handler, middleware stack,

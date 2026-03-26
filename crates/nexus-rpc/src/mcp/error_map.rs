@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Internal error → MCP tool error mapping.
 //!
 //! Translates [`IntentError`] and [`RpcError`] into MCP-compatible

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Lightweight per-transaction lifecycle tracing for internal benchmarking.
 //!
 //! Tracks the first observed timestamp for each major pipeline stage so

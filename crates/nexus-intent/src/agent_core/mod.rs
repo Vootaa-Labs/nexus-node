@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Agent Core Engine (ACE) — protocol-neutral agent processing core.
 //!
 //! This module serves as the **single internal truth source** for all

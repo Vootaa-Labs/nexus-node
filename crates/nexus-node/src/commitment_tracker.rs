@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Commitment tracker — maintains state commitment + backup hash tree in
 //! lockstep with the execution pipeline.
 //!

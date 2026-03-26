@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{artifact, rpc_client};
 use clap::Args;
 use nexus_execution::types::{TransactionBody, TransactionPayload};

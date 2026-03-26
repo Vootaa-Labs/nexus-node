@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! J-9: Stake-weighted certificate build & verify — integration tests.
 //!
 //! All five acceptance criteria from the roadmap:

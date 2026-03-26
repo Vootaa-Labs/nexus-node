@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Chain head REST endpoint.
 //!
 //! `GET /v2/chain/head` — returns the latest committed block summary.

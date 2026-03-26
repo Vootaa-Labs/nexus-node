@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Contract query pipeline — read-only view function execution.
 //!
 //! TLD-09 §6.2: read-only sessions never produce persistent writes.

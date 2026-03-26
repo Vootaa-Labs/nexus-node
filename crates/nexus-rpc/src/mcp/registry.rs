@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! MCP tool registry — the compatibility matrix.
 //!
 //! Defines which MCP tools are exposed, which ACE request kind each

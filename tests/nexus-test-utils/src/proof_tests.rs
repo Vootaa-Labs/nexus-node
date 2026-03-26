@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Proof roundtrip integration tests (v0.1.5 — proof surface hardening).
 //!
 //! Verifies the full lifecycle of state proofs:

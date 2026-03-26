@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! A2A Negotiation/Settlement Orchestrator.
 //!
 //! Manages the lifecycle of multiple A2A negotiations, processing

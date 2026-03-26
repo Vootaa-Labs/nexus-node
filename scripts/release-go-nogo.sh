@@ -1,4 +1,6 @@
 #!/usr/bin/env zsh
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
 # ─────────────────────────────────────────────────────────────────────────
 # release-go-nogo.sh  (v0.1.10 — X-2)
 #
@@ -509,7 +511,7 @@ for i in {1..${#CHECK_NAMES[@]}}; do
   [[ $i -gt 1 ]] && json_output+=","
   detail="${CHECK_DETAILS[$i]:-}"
   # Escape double quotes in detail.
-  detail="${detail//\"/\\\"}"
+  detail="${detail//\"/\\"}"
   json_output+="{\"name\":\"${CHECK_NAMES[$i]}\",\"result\":\"${CHECK_RESULTS[$i]}\",\"detail\":\"$detail\"}"
 done
 

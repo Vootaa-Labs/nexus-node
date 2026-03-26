@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Move execution sessions.
 //!
 //! TLD-09 §6.2 defines three session types:

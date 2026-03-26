@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! HTTP middleware stack: CORS, tracing, request-id, rate limiting, audit.
 //!
 //! # Middleware order (outermost → innermost)

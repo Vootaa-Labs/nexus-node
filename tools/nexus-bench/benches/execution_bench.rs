@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Block-STM execution engine benchmarks.
 //!
 //! Measures throughput and latency baselines for the parallel execution

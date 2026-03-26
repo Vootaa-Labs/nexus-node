@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Batch persistence — write-through and cold-restart recovery for the
 //! batch store (`cf_batches`).
 //!

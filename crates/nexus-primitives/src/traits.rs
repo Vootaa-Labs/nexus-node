@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Compile-time constraint trait for all Nexus protocol identifier types.
 //!
 //! [`ProtocolId`] is not implemented manually by users.  It is fulfilled

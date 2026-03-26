@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Storage-layer test fixtures: temp stores, KV helpers.
 
 use std::path::PathBuf;

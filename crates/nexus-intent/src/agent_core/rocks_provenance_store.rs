@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! RocksDB-backed provenance store with secondary indexes.
 //!
 //! All data lives in the `cf_provenance` column family. Records use

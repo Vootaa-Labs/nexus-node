@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Intent layer metrics (MVO Rule C — DEV-05 §3).
 //!
 //! Naming convention: `nexus_intent_<metric>_<unit>`.

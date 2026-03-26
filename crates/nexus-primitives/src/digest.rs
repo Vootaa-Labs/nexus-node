@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! BLAKE3-256 digest type and semantic type aliases.
 //!
 //! All digest / hash computations in the Nexus protocol use BLAKE3-256 (32 bytes).

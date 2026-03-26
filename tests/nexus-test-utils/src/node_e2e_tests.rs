@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! E2E transaction lifecycle test — submit → execute → receipt in storage.
 //!
 //! Exercises the full node pipeline:

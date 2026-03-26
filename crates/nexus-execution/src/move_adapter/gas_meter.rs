@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Gas metering and limit control for Move VM execution.
 //!
 //! Provides a [`GasMeter`] trait and a [`SimpleGasMeter`] implementation

@@ -1,4 +1,6 @@
 #!/usr/bin/env zsh
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
 # ─────────────────────────────────────────────────────────────
 # abuse-replay.sh — Query / MCP abuse behaviour replay
 #

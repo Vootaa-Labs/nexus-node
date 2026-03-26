@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Top-level node configuration.
 //!
 //! [`NodeConfig`] aggregates every subsystem's config into one struct

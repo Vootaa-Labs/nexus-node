@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-primitives` — Core primitive types for the Nexus blockchain.
 //!
 //! This crate has **no internal crate dependencies** and only depends on

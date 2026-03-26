@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Network status RPC endpoints (T-7007).
 //!
 //! | Method | Path | Description |

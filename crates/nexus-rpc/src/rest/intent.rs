@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Intent REST endpoints.
 //!
 //! `POST /v2/intent/submit` — submit a signed user intent.

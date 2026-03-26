@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Intent lifecycle watcher — monitors execution receipts and updates the
 //! [`IntentTracker`] when intent-related transactions are confirmed or fail.
 //!

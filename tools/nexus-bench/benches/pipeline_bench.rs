@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Phase 5 + Phase 9 pipeline benchmarks — genesis boot, query backend,
 //! Block-STM execution throughput, and Phase 9 pipeline component benchmarks.
 //!

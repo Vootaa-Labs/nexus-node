@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! S-4: Staking failure and fallback tests.
 //!
 //! Validates every error path in the election pipeline:

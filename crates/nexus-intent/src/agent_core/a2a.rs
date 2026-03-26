@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Agent-to-Agent (A2A) canonical envelope and state machine.
 //!
 //! When one agent needs to collaborate with another (e.g. a swap

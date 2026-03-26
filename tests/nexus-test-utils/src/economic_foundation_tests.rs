@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! K-1: End-to-end integration tests — voo precision + stake-weighted quorum combined.
 //!
 //! Verifies that Phase I (token precision 10^9 voo) and Phase J (stake-weighted

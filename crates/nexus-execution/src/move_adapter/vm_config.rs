@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! VM configuration for the Move adapter.
 //!
 //! [`VmConfig`] is derived from [`ExecutionConfig`](nexus_config::ExecutionConfig)

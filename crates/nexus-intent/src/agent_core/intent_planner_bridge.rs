@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Concrete [`PlannerBackend`] bridging `AgentEnvelope` requests to the
 //! [`IntentCompiler`] pipeline.
 //!

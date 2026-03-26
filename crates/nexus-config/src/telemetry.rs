@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Telemetry and observability configuration.
 //!
 //! Controls logging verbosity, OpenTelemetry export targets, and

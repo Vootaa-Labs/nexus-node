@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Phase 8 integration tests — network security hardening & maturity.
 //!
 //! Cross-module tests validating:

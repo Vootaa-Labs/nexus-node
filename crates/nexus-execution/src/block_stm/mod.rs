@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Block-STM parallel transaction execution engine.
 //!
 //! Implements the three-phase optimistic concurrency control pipeline:

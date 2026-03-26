@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Consensus engine — async actor that orchestrates the consensus pipeline.
 //!
 //! [`ConsensusEngine`] ties together:

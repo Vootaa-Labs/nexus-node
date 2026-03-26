@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Epoch lifecycle management.
 //!
 //! [`EpochManager`] tracks the current epoch, evaluates transition

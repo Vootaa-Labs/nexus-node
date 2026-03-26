@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Request dispatcher — routes validated agent requests to backends.
 //!
 //! The dispatcher sits between the session/planner logic and the

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-node` — Nexus validator node entry point.
 //!
 //! This is a **thin assembly binary**: it parses configuration, initialises

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Formal Verification Property Tests — Consensus Layer
 //!
 //! Invariant references: Solutions/21-Formal-Verification-Object-Register.md

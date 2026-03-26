@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! BLAKE3 domain separator constants for the Nexus protocol.
 //!
 //! **FROZEN-3**: These constants are protocol-level and changing them

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Transaction endpoints.
 //!
 //! `GET  /v2/tx/{hash}/status` — query transaction receipt by digest.

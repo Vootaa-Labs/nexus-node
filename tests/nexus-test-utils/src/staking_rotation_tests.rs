@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! R-5: Staking rotation and recovery end-to-end tests.
 //!
 //! Validates the full staking -> election -> committee rotation pipeline

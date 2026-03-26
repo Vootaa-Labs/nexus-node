@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! BLAKE3-256 hasher with mandatory domain separation.
 //!
 //! Implements the [`CryptoHasher`] trait using BLAKE3 as the underlying

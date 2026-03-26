@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `faucet` — request test tokens on devnet (dev-mode only).
 
 use anyhow::Result;

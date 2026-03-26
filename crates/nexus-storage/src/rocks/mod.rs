@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! [`RocksStore`] — RocksDB-backed implementation of [`StateStorage`].
 //!
 //! All blocking RocksDB I/O is dispatched through [`tokio::task::spawn_blocking`]

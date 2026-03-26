@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Batch store — maps batch digests to their constituent transactions.
 //!
 //! The [`BatchStore`] is the link between the batch proposer (which creates

@@ -10,6 +10,10 @@ description  = "Criterion micro-benchmark suite for Nexus cryptographic and cons
 name = "nexus_bench"
 path = "src/lib.rs"
 
+[[bin]]
+name = "devnet_bench"
+path = "src/bin/devnet_bench.rs"
+
 [[bench]]
 name    = "crypto_bench"
 harness = false
@@ -53,12 +57,17 @@ nexus-config     = { workspace = true }
 nexus-storage    = { workspace = true }
 nexus-node       = { workspace = true }
 nexus-rpc        = { workspace = true }
+nexus-wallet     = { workspace = true }
 nexus-test-utils = { workspace = true }
 bcs              = { workspace = true }
 tokio            = { workspace = true }
 futures          = { workspace = true }
+serde            = { workspace = true }
 serde_json       = { workspace = true }
 hex              = { workspace = true }
+clap             = { workspace = true }
+anyhow           = { workspace = true }
+ureq             = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

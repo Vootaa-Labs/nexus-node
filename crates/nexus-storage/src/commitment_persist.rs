@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Versioned persistence layout for state commitment data.
 //!
 //! Phase M starts by defining dedicated storage records for commitment

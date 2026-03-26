@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Unified network service — lifecycle manager for all P2P subsystems.
 //!
 //! [`NetworkService`] owns and wires together:

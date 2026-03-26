@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! B-1: Multi-epoch stress tests with partition, restart, and replay.
 //!
 //! Extends the existing soak tests with combination scenarios that exercise

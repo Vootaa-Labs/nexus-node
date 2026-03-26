@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-execution` — Move VM execution engine for Nexus.
 //!
 //! Runs Move bytecode with Block-STM parallel execution and gas metering.

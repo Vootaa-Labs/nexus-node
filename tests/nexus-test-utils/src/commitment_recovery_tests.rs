@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Commitment persistence recovery tests over real RocksDB paths.
 //!
 //! These tests isolate commitment-specific cold-start behaviour from the

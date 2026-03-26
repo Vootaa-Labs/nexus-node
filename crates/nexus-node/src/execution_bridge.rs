@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Execution bridge — drains committed sub-DAGs from the consensus engine,
 //! resolves the constituent transactions, feeds them to the execution service,
 //! and persists the results (receipts + state changes) to storage.

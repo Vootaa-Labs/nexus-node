@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Core network trait contracts — **FROZEN-2** interface definitions.
 //!
 //! These traits define the stable boundary between the network layer and its

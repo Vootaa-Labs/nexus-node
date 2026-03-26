@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-network` — P2P network transport layer for Nexus.
 //!
 //! Provides authenticated, encrypted validator-to-validator communication.

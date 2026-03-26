@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! FALCON-512 digital signature scheme (FN-DSA, NIST FIPS 206).
 //!
 //! Used for **consensus-layer** signatures (Narwhal certificates, Shoal++ votes).

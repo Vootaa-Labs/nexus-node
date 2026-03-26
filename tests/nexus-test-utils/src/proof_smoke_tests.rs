@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! C-2: Proof surface smoke tests for release rehearsal.
 //!
 //! This module provides a self-contained drill that validates the proof

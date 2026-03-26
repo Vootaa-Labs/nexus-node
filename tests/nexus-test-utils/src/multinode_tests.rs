@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Multi-node integration tests (T-7008).
 //!
 //! Exercises the full pipeline across 3 in-process validators:

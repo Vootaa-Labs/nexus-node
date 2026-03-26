@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! [`RocksWriteBatch`] — atomic write batch for the RocksDB backend.
 
 use crate::traits::WriteBatchOps;

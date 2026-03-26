@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Proptest-based formal verification — Consensus Layer
 //!
 //! Strengthens the deterministic tests in `fv_property_tests.rs` with

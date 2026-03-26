@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Anchor batch task — periodically bundles un-anchored provenance records
 //! into a `ProvenanceAnchor` transaction and injects it into the mempool.
 //!

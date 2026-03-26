@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Agent session lifecycle and replay protection.
 //!
 //! Each agent interaction creates or continues an [`AgentSession`]

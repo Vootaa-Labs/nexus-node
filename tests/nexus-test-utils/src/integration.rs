@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Cross-crate integration tests (Phase 1 ~ Phase 3).
 //!
 //! End-to-end tests exercising the consensus, execution, and intent

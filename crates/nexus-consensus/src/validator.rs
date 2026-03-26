@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! PoS committee management and quorum computation.
 //!
 //! [`Committee`] is the canonical implementation of [`ValidatorRegistry`].

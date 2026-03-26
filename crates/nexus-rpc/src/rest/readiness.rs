@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Readiness probe endpoint.
 //!
 //! `GET /ready` — returns 200 when the node is ready to serve traffic,

@@ -43,27 +43,13 @@ Exit criteria:
 
 ---
 
-### 2026-03-25: devnet_bench binary not yet ported
+### 2026-03-26: devnet_bench binary ported (RESOLVED)
 
-Status: open, deferred
+Status: resolved
 
-Scope:
-- `make devnet-bench` and `make devnet-cold-bench` fail because the
-  `devnet_bench` binary (a `[[bin]]` target in `nexus-bench`) has not been
-  ported from the v0.1.12 development tree.
-
-Why this is not yet resolved:
-- The binary was present in `Nexus_Devnet_0.1.12_Pre` at
-  `tools/nexus-bench/src/bin/devnet_bench.rs` but was not carried forward
-  during the v0.1.13 construction phases because it depends on HTTP-based
-  transaction submission and confirmation polling that changed structurally
-  between versions.
-
-Required follow-up:
-- Port `devnet_bench.rs` from `0.1.12_Pre` to the current nexus-bench crate,
-  updating RPC calls to the v0.1.13 REST API surface.
-- Verify `make devnet-bench` and `make devnet-cold-bench` complete end-to-end.
-
-Exit criteria:
-- `make devnet-cold-bench` produces benchmark JSON and English/Chinese reports
-- This backlog entry is removed
+Resolution:
+- `devnet_bench.rs` ported from v0.1.12_Pre to current nexus-bench crate,
+  updated for v0.1.13 REST API surface (`/v2` prefix, no lifecycle endpoint).
+- `make devnet-bench` verified end-to-end on 7-node Docker devnet.
+- Benchmark produces JSON (`target/devnet-bench/devnet_benchmark_results.json`)
+  and EN/ZH markdown reports under `Docs/{en,zh}/Report/Benchmark/`.

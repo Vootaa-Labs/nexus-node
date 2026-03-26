@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Intent validation — structural and cryptographic checks.
 //!
 //! Every [`SignedUserIntent`] passes through these checks before

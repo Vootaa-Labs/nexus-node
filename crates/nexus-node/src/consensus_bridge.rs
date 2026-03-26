@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Consensus message relay — bridges the gossip P2P layer with the
 //! local [`ConsensusEngine`].
 //!

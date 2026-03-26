@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Contract query endpoints.
 //!
 //! `POST /v2/contract/query` — execute a read-only view function.

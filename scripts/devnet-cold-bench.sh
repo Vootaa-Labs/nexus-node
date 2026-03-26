@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
 # ─────────────────────────────────────────────────────────────────────────
 # devnet-cold-bench.sh — Rebuild image, cold-start devnet, rerun lifecycle
 # benchmark, and capture fresh metrics.

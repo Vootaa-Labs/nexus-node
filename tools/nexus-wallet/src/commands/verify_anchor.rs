@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `verify-anchor` — fetch an anchor receipt and optionally verify its digest.
 
 use anyhow::{Context, Result};

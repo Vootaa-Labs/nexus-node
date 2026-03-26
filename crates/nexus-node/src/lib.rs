@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-node` — Nexus validator node assembly crate.
 //!
 //! The library re-exports backend adapters and node wiring utilities.

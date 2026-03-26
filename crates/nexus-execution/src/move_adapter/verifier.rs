@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Bytecode verifier for Move module publishing.
 //!
 //! Performs structural validation of compiled Move bytecode *before* it is

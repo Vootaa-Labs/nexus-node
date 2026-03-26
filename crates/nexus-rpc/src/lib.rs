@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-rpc` — External API layer for Nexus.
 //!
 //! Provides REST, GraphQL, and WebSocket APIs for clients, explorers,

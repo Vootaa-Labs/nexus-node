@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Move ↔ Nexus type conversion bridge.
 //!
 //! All Move-internal type representations are isolated within `move_adapter/`

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Transport layer — QUIC-based peer-to-peer message delivery.
 //!
 //! Provides [`TransportManager`] which drives the libp2p `Swarm` event loop

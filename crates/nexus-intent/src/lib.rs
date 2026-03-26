@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-intent` — User-intent routing layer for Nexus.
 //!
 //! Accepts high-level user intents (semantic transaction specifications)

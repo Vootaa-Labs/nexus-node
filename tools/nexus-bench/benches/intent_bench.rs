@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Intent layer compilation benchmarks.
 //!
 //! Measures intent compilation throughput and latency for the

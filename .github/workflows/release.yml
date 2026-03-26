@@ -1,11 +1,18 @@
-# Release Build — triggered after CI gates pass on main
+# Release Build — triggered on version tags v0.2.0 and above.
 # Builds multi-target release binaries, including nexus-wallet for developer tooling.
+#
+# Tag convention:
+#   v0.1.x   — devnet internal iterations (do NOT tag on public repo, no release triggered)
+#   v0.2.0+  — first public testnet release series (triggers this workflow)
+#   v1.0.0+  — mainnet (triggers this workflow)
 
 name: Release Build
 
 on:
   push:
-    branches: [main]
+    tags:
+      - "v0.[2-9]*"    # v0.2.x through v0.9.x
+      - "v[1-9]*"      # v1.x.x and above
 
 permissions:
   contents: read

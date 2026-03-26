@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Database schema migration framework (P5-5).
 //!
 //! Tracks a `SchemaVersion` in a reserved key within the default column

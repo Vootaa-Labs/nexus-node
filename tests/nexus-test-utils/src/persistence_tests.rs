@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Integration tests for DAG and BatchStore persistence (F-4, G-4).
 //!
 //! Covers:

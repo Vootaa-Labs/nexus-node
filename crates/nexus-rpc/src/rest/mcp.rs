@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Online MCP adapter endpoints.
 //!
 //! Exposes a minimal HTTP entry point for the MCP registry and tool calls,

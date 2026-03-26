@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-consensus` — Narwhal DAG + Shoal++ BFT consensus engine for Nexus.
 //!
 //! Implements the two-phase consensus protocol:

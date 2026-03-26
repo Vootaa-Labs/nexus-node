@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Validator identity registry — maps `AccountAddress` to cryptographic keys.
 //!
 //! Populated at genesis from the validator set, and potentially updated

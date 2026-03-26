@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Newtype wrappers for all Nexus protocol identifier types.
 //!
 //! These are zero-cost abstractions over primitive integers that provide

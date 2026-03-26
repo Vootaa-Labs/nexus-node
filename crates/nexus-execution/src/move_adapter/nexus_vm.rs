@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Nexus Move VM — ABI-driven bytecode execution engine.
 //!
 //! [`NexusMoveVm`] implements the [`MoveVm`] trait with real execution

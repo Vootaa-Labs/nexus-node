@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! `nexus-test-utils` — Shared test utilities for the Nexus workspace.
 //!
 //! Provides common fixtures, assertion helpers, and test infrastructure

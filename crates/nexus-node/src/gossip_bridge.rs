@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Gossip → Mempool bridge — spawns a task that receives transactions from
 //! the P2P gossip layer and inserts validated ones into the local mempool.
 //!

@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Move VM adapter — isolation boundary for Move bytecode execution.
 //!
 //! All Move VM internals (bytecode dispatch, module resolution, gas tables)

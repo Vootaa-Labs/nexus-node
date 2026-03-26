@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! [`AccountResolver`] implementation and supporting sub-modules.
 //!
 //! * [`shard_lookup`] — Jump Consistent Hash for deterministic shard routing.

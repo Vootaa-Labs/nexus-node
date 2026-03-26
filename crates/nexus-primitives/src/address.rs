@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Account and contract addresses, token identifiers, and the `Amount` type.
 //!
 //! # Address derivation

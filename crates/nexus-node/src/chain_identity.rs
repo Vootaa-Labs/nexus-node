@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Chain identity validation — genesis hash consistency checks.
 //!
 //! On first boot, stores the genesis hash in a marker file inside the

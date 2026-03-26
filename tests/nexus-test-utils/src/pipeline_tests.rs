@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Phase 9 pipeline integration tests (T-9006).
 //!
 //! Validates the full transaction pipeline: mempool → batch_proposer →

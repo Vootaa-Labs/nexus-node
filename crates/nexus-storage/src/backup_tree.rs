@@ -1,3 +1,6 @@
+// Copyright (c) The Nexus-Node Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! BLAKE3 backup Merkle tree implementing [`BackupHashTree`].
 //!
 //! Maintained in parallel with the primary [`StateCommitment`] tree.
