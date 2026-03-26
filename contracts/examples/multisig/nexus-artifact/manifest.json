@@ -1,0 +1,14 @@
+{
+  "package_name": "multisig",
+  "package_hash": "74f7d5e1f4b34a871995b65023feaf3854ecb67720cfde6c861f3bcf1c91548e",
+  "module_count": 1,
+  "total_bytecode_bytes": 915,
+  "upgrade_policy": "Immutable",
+  "modules": [
+    {
+      "name": "multisig",
+      "size_bytes": 915,
+      "blake3": "74f7d5e1f4b34a871995b65023feaf3854ecb67720cfde6c861f3bcf1c91548e"
+    }
+  ]
+}

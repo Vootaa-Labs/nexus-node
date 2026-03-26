@@ -1,0 +1,14 @@
+{
+  "package_name": "voting",
+  "package_hash": "9c9708e797e833a88a546ec78997be19f4b6bf8059c7d308e9d440569840a37c",
+  "module_count": 1,
+  "total_bytecode_bytes": 763,
+  "upgrade_policy": "Immutable",
+  "modules": [
+    {
+      "name": "voting",
+      "size_bytes": 763,
+      "blake3": "9c9708e797e833a88a546ec78997be19f4b6bf8059c7d308e9d440569840a37c"
+    }
+  ]
+}

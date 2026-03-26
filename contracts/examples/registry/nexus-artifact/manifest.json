@@ -1,0 +1,14 @@
+{
+  "package_name": "registry",
+  "package_hash": "5a62cb70a5fd0e3fe71673f90816924b986c10d15f7730448d281d8f6d46e614",
+  "module_count": 1,
+  "total_bytecode_bytes": 751,
+  "upgrade_policy": "Immutable",
+  "modules": [
+    {
+      "name": "registry",
+      "size_bytes": 751,
+      "blake3": "5a62cb70a5fd0e3fe71673f90816924b986c10d15f7730448d281d8f6d46e614"
+    }
+  ]
+}

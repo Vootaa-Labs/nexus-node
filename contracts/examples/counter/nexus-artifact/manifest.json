@@ -1,0 +1,14 @@
+{
+  "package_name": "counter",
+  "package_hash": "5e109659c12075d2ff60e4badeafdd7097762f64f6ab13588a8f8acef12a4312",
+  "module_count": 1,
+  "total_bytecode_bytes": 456,
+  "upgrade_policy": "Immutable",
+  "modules": [
+    {
+      "name": "counter",
+      "size_bytes": 456,
+      "blake3": "5e109659c12075d2ff60e4badeafdd7097762f64f6ab13588a8f8acef12a4312"
+    }
+  ]
+}

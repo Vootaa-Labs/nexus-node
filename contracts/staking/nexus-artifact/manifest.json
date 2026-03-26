@@ -1,0 +1,14 @@
+{
+  "package_name": "staking",
+  "package_hash": "5987c77a4ad6edd676dfc472819531d95b9592d06d7391f42a7c9e0eb1eb1f16",
+  "module_count": 1,
+  "total_bytecode_bytes": 2055,
+  "upgrade_policy": "Immutable",
+  "modules": [
+    {
+      "name": "staking",
+      "size_bytes": 2055,
+      "blake3": "5987c77a4ad6edd676dfc472819531d95b9592d06d7391f42a7c9e0eb1eb1f16"
+    }
+  ]
+}

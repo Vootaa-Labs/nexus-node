@@ -85,7 +85,7 @@ jobs:
       - name: Install audit tools
         run: |
           cargo install cargo-audit --locked
-          cargo install cargo-deny --locked
+          cargo install cargo-deny --version 0.18.3 --locked
 
       - name: Cargo audit (CVE check)
         # Temporary waivers for libp2p 0.54.x TLS chain (see Docs/Report/BACKLOG.md)
@@ -133,7 +133,7 @@ jobs:
           sudo apt-get install -y libclang-dev
 
       - name: Install cargo-nextest
-        run: cargo install cargo-nextest --locked
+        run: cargo install cargo-nextest --version 0.9.100 --locked
 
       - name: Run tests (nextest)
         run: cargo nextest run --profile ci
@@ -203,7 +203,7 @@ jobs:
           sudo apt-get install -y libclang-dev
 
       - name: Install cargo-nextest
-        run: cargo install cargo-nextest --locked
+        run: cargo install cargo-nextest --version 0.9.100 --locked
 
       # Phase A: Execution correctness
       - name: "Phase A: Forged vote rejected (SEC-H2)"
@@ -709,7 +709,7 @@ jobs:
           sudo apt-get install -y libclang-dev
 
       - name: Install cargo-llvm-cov
-        run: cargo install cargo-llvm-cov --locked
+        run: cargo install cargo-llvm-cov --version 0.6.21 --locked
 
       - name: Generate coverage report
         run: |

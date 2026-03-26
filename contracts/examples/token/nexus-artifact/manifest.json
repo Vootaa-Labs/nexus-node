@@ -1,0 +1,14 @@
+{
+  "package_name": "token",
+  "package_hash": "31b14339b7bcc2f21719594fd9912eaef7b85dac62eac572c858afa9daf11231",
+  "module_count": 1,
+  "total_bytecode_bytes": 760,
+  "upgrade_policy": "Immutable",
+  "modules": [
+    {
+      "name": "token",
+      "size_bytes": 760,
+      "blake3": "31b14339b7bcc2f21719594fd9912eaef7b85dac62eac572c858afa9daf11231"
+    }
+  ]
+}

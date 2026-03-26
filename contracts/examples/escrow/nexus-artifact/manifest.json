@@ -1,0 +1,14 @@
+{
+  "package_name": "escrow",
+  "package_hash": "6c0be77bb2a1c33613a9f99dbb92b8896e0d8f9274f14bf32685701f6a720eff",
+  "module_count": 1,
+  "total_bytecode_bytes": 653,
+  "upgrade_policy": "Immutable",
+  "modules": [
+    {
+      "name": "escrow",
+      "size_bytes": 653,
+      "blake3": "6c0be77bb2a1c33613a9f99dbb92b8896e0d8f9274f14bf32685701f6a720eff"
+    }
+  ]
+}

@@ -62,6 +62,9 @@ tarpaulin-report.html
 # ---------------------------------------------------------------------------
 contracts/**/build/
 **/nexus-artifact/
+# Track pre-compiled bytecode in contracts/ — required by include_bytes! in tests
+!contracts/**/nexus-artifact/
+!contracts/**/nexus-artifact/**
 tools/**/build/
 
 # ---------------------------------------------------------------------------
