@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -115,7 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -153,7 +153,7 @@ jobs:
     timeout-minutes: 30
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -185,7 +185,7 @@ jobs:
     timeout-minutes: 20
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -319,7 +319,7 @@ jobs:
     timeout-minutes: 15
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -363,7 +363,7 @@ jobs:
     timeout-minutes: 15
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -408,7 +408,7 @@ jobs:
     timeout-minutes: 20
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -446,7 +446,7 @@ jobs:
     timeout-minutes: 15
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -490,7 +490,7 @@ jobs:
     timeout-minutes: 20
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -524,7 +524,7 @@ jobs:
     timeout-minutes: 15
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -560,7 +560,7 @@ jobs:
     timeout-minutes: 10
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -607,7 +607,7 @@ jobs:
     timeout-minutes: 5
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: "Check config-doc drift"
@@ -625,7 +625,7 @@ jobs:
     timeout-minutes: 10
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -657,7 +657,7 @@ jobs:
     timeout-minutes: 45
     needs: [lint, security, test, test-vm, correctness-negative, startup-readiness, epoch-reconfig, stake-weighted-quorum, proof-surface, config-drift, gas-calibration, capacity-curves, cold-restart-recovery]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -690,7 +690,7 @@ jobs:
     timeout-minutes: 30
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -732,7 +732,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -762,7 +762,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -794,7 +794,7 @@ jobs:
     timeout-minutes: 30
     needs: [test]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain
@@ -832,7 +832,7 @@ jobs:
     timeout-minutes: 45
     needs: [test, test-vm, check]
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
 
       - name: Install Rust toolchain

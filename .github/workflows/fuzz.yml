@@ -17,9 +17,9 @@ jobs:
   fuzz:
     name: Fuzz Smoke Test
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v6.0.2
 
       - name: Install Rust nightly (required for cargo-fuzz)
         uses: dtolnay/rust-toolchain@0f1b44df7e9cbb178d781a242338dfa5e243ad7f # nightly

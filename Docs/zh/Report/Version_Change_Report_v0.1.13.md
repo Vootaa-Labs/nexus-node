@@ -48,6 +48,7 @@
 | `v0.1.9` | staking 与委员会轮换 | staking 合约生命周期、快照、election、rotation 和恢复路径成形 |
 | `v0.1.10` | 多分片与跨分片执行 | 多分片运行时、shard-aware mempool/gossip/state sync、HTLC lock/claim/refund 全链路落地 |
 | `v0.1.11` | Agent Core 与验证证据链 | ACE 主骨架、MCP、session/provenance 持久化、differential/property-test runner 进入主线 |
+| `v0.1.12` | 运行时加固 | Move VM 边界加固、gas/payload 接口规范化、配置外部化、PQC (ML-DSA-65) 集成 |
 | `v0.1.13` | 对照现状收敛与对外重构准备 | 代码审计表明核心能力已基本成形，重点转向硬化、真实执行闭环和公开资料重组 |
 
 ## 5. 跨版本能力演进

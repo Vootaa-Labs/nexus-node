@@ -2663,6 +2663,7 @@ dependencies = [
 [[package]]
 name = "move-binary-format"
 version = "0.0.3"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -2677,10 +2678,12 @@ dependencies = [
 [[package]]
 name = "move-borrow-graph"
 version = "0.0.1"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 
 [[package]]
 name = "move-bytecode-spec"
 version = "0.1.0"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 dependencies = [
  "once_cell",
  "quote",
@@ -2690,6 +2693,7 @@ dependencies = [
 [[package]]
 name = "move-bytecode-verifier"
 version = "0.1.0"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 dependencies = [
  "fail",
  "move-binary-format",
@@ -2703,6 +2707,7 @@ dependencies = [
 [[package]]
 name = "move-core-types"
 version = "0.0.4"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 dependencies = [
  "anyhow",
  "bcs",
@@ -2724,6 +2729,7 @@ dependencies = [
 [[package]]
 name = "move-vm-metrics"
 version = "0.1.0"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 dependencies = [
  "once_cell",
  "prometheus",
@@ -2732,6 +2738,7 @@ dependencies = [
 [[package]]
 name = "move-vm-runtime"
 version = "0.1.0"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 dependencies = [
  "ambassador",
  "better_any",
@@ -2756,6 +2763,7 @@ dependencies = [
 [[package]]
 name = "move-vm-types"
 version = "0.1.0"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 dependencies = [
  "ambassador",
  "bcs",
@@ -3013,6 +3021,7 @@ dependencies = [
 [[package]]
 name = "nexus-move-bytecode"
 version = "0.1.1"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 dependencies = [
  "nexus-move-types",
 ]
@@ -3020,6 +3029,7 @@ dependencies = [
 [[package]]
 name = "nexus-move-package"
 version = "0.1.1"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 dependencies = [
  "bcs",
  "blake3",
@@ -3032,6 +3042,7 @@ dependencies = [
 [[package]]
 name = "nexus-move-runtime"
 version = "0.1.1"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 dependencies = [
  "bcs",
  "better_any",
@@ -3051,6 +3062,7 @@ dependencies = [
 [[package]]
 name = "nexus-move-stdlib"
 version = "0.1.1"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 dependencies = [
  "better_any",
  "move-core-types",
@@ -3065,6 +3077,7 @@ dependencies = [
 [[package]]
 name = "nexus-move-types"
 version = "0.1.1"
+source = "git+https://github.com/vootaa-labs/nexus-move?tag=v0.1.1#222f91c7e2a091c869a26ddb3def10033ca9079d"
 dependencies = [
  "serde",
 ]
