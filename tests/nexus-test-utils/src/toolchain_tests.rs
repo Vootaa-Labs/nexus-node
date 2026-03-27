@@ -100,7 +100,7 @@ mod tests {
         // Verify allocations via query backend.
         let epoch = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let commit_seq = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let query = StorageQueryBackend::new(store, shard_id, epoch, commit_seq);
+        let query = StorageQueryBackend::new(store, epoch, commit_seq);
 
         let treasury = AccountAddress([0x01; 32]);
         let balance = query.account_balance(&treasury, &TokenId::Native).unwrap();

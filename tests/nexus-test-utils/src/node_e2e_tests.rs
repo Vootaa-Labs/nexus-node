@@ -136,7 +136,7 @@ mod tests {
         // ── 6. Query receipt via QueryBackend ───────────────────────────
         let epoch = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let commit_seq = Arc::new(std::sync::atomic::AtomicU64::new(1));
-        let query_backend = StorageQueryBackend::new(store.clone(), shard_id, epoch, commit_seq);
+        let query_backend = StorageQueryBackend::new(store.clone(), epoch, commit_seq);
 
         let dto = query_backend
             .transaction_receipt(&receipt.tx_digest)
@@ -172,7 +172,7 @@ mod tests {
 
         let epoch = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let commit_seq = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let query_backend = StorageQueryBackend::new(store, shard_id, epoch, commit_seq);
+        let query_backend = StorageQueryBackend::new(store, epoch, commit_seq);
 
         // Genesis test config allocates 1 NXS to AccountAddress::ZERO.
         let balance = query_backend

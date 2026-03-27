@@ -225,7 +225,7 @@ fn node_cold_start_wires_query_and_proof_backends_from_rocksstore() {
     let store = RocksStore::open(&config).unwrap();
     let epoch = Arc::new(AtomicU64::new(3));
     let commit_seq = Arc::new(AtomicU64::new(7));
-    let query_backend = StorageQueryBackend::new(store.clone(), shard_id, epoch, commit_seq);
+    let query_backend = StorageQueryBackend::new(store.clone(), epoch, commit_seq);
     let proof_backend = LiveStateProofBackend::new(
         new_shared_tracker_with_persistence(store, config.commitment_cache_size).unwrap(),
     );

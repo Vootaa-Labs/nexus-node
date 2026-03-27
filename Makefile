@@ -80,8 +80,9 @@ doctest:
 	cargo test --doc
 
 ## Run ignored tests (crypto KAT vectors)
+## --lib --tests excludes doctests (rustdoc runs `ignore`-fenced blocks under --ignored)
 test-kat:
-	cargo test -- --ignored --test-threads=1
+	cargo test --lib --tests -- --ignored --test-threads=1
 
 ## All tests: nextest + doc-tests + KAT
 test-all: nextest doctest test-kat

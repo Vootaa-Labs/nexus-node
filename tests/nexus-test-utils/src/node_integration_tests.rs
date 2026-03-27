@@ -81,7 +81,7 @@ mod tests {
         // Verify balance via query backend.
         let epoch = Arc::new(std::sync::atomic::AtomicU64::new(1));
         let commit = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let query = StorageQueryBackend::new(store.clone(), shard_id, epoch, commit);
+        let query = StorageQueryBackend::new(store.clone(), epoch, commit);
         assert_eq!(
             query.account_balance(&sender, &TokenId::Native).unwrap(),
             Amount(500_000)
@@ -206,8 +206,7 @@ mod tests {
         let store = MemoryStore::new();
         let epoch = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let commit = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let query =
-            StorageQueryBackend::new(store, ShardId(0), Arc::clone(&epoch), Arc::clone(&commit));
+        let query = StorageQueryBackend::new(store, Arc::clone(&epoch), Arc::clone(&commit));
 
         // Initial state.
         let h1 = query.health_status();

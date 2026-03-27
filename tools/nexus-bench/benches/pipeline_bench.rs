@@ -110,7 +110,7 @@ fn bench_balance_query(c: &mut Criterion) {
 
     let epoch = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let commit = Arc::new(std::sync::atomic::AtomicU64::new(0));
-    let query = StorageQueryBackend::new(store, shard_id, epoch, commit);
+    let query = StorageQueryBackend::new(store, epoch, commit);
 
     let mut group = c.benchmark_group("pipeline/balance_query");
     group.throughput(Throughput::Elements(1));

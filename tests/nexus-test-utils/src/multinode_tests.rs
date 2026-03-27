@@ -182,7 +182,7 @@ mod tests {
 
         let epoch = Arc::new(AtomicU64::new(0));
         let commit_seq = Arc::new(AtomicU64::new(1));
-        let query = StorageQueryBackend::new(store1.clone(), shard_id, epoch, commit_seq);
+        let query = StorageQueryBackend::new(store1.clone(), epoch, commit_seq);
         let dto = nexus_rpc::QueryBackend::transaction_receipt(&query, &tx_digest)
             .unwrap()
             .expect("receipt should be queryable");

@@ -78,7 +78,7 @@ mod tests {
         let commit_seq = Arc::new(AtomicU64::new(0));
 
         let query_backend =
-            StorageQueryBackend::new(store.clone(), shard_id, epoch.clone(), commit_seq.clone());
+            StorageQueryBackend::new(store.clone(), epoch.clone(), commit_seq.clone());
         let consensus_backend = LiveConsensusBackend::new(engine.clone());
         let network_backend = LiveNetworkBackend::new(net_handle.discovery.clone());
         let tx_broadcaster = GossipBroadcaster::new(net_handle.gossip.clone());
@@ -206,12 +206,8 @@ mod tests {
         commit_seq.store(1, std::sync::atomic::Ordering::Relaxed);
 
         // ── 13. Query receipt via QueryBackend (internal API) ───────────
-        let query2 = StorageQueryBackend::new(
-            store.clone(),
-            shard_id,
-            epoch.clone(),
-            Arc::new(AtomicU64::new(1)),
-        );
+        let query2 =
+            StorageQueryBackend::new(store.clone(), epoch.clone(), Arc::new(AtomicU64::new(1)));
         let dto = query2.transaction_receipt(&receipt.tx_digest).unwrap();
         assert!(dto.is_some(), "receipt must be queryable via backend");
 
@@ -261,8 +257,7 @@ mod tests {
         // Backends
         let epoch = Arc::new(AtomicU64::new(0));
         let commit_seq = Arc::new(AtomicU64::new(0));
-        let query_backend =
-            StorageQueryBackend::new(store.clone(), shard_id, epoch.clone(), commit_seq);
+        let query_backend = StorageQueryBackend::new(store.clone(), epoch.clone(), commit_seq);
         let consensus_backend = LiveConsensusBackend::new(engine);
         let network_backend = LiveNetworkBackend::new(net_handle.discovery.clone());
         let tx_broadcaster = GossipBroadcaster::new(net_handle.gossip.clone());
@@ -289,8 +284,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
         // Health check — verify query backend responds
-        let query3 =
-            StorageQueryBackend::new(store.clone(), shard_id, epoch, Arc::new(AtomicU64::new(0)));
+        let query3 = StorageQueryBackend::new(store.clone(), epoch, Arc::new(AtomicU64::new(0)));
         let health = query3.health_status();
         assert_eq!(health.status, "healthy");
 
@@ -376,7 +370,7 @@ mod tests {
 
         // RPC (minimal)
         let commit_seq = Arc::new(AtomicU64::new(0));
-        let query_backend = StorageQueryBackend::new(store.clone(), shard_id, epoch, commit_seq);
+        let query_backend = StorageQueryBackend::new(store.clone(), epoch, commit_seq);
         let network_backend = LiveNetworkBackend::new(net_handle.discovery.clone());
         let tx_broadcaster = GossipBroadcaster::new(net_handle.gossip.clone());
 

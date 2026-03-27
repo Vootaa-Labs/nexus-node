@@ -424,7 +424,10 @@ mod tests {
         // Anchor 0 → V0 missing → gap > 6 → skip to anchor 2.
         // Anchor 2 → leader V1 → V1 cert at round 2 exists → COMMIT.
         let result = orderer.try_commit(&dag).unwrap();
-        assert!(result.is_some(), "loop should skip stale anchor and commit next");
+        assert!(
+            result.is_some(),
+            "loop should skip stale anchor and commit next"
+        );
         assert_eq!(result.unwrap().sequence, CommitSequence(0));
         assert_eq!(orderer.next_anchor_round(), RoundNumber(4));
     }

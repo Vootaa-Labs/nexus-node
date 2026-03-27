@@ -449,19 +449,15 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
         .unwrap_or_else(SharedChainHead::new);
 
     let query_backend = Arc::new(
-        StorageQueryBackend::new(
-            store.clone(),
-            epoch.clone(),
-            commit_seq.clone(),
-        )
-        .with_peer_count({
-            let disc = net_handle.discovery.clone();
-            Arc::new(move || disc.routing_health().known_peers)
-        })
-        .with_chain_head(rpc_chain_head)
-        .with_readiness(readiness.clone())
-        .with_gas_budget(config.rpc.query_gas_budget)
-        .with_num_shards(num_shards),
+        StorageQueryBackend::new(store.clone(), epoch.clone(), commit_seq.clone())
+            .with_peer_count({
+                let disc = net_handle.discovery.clone();
+                Arc::new(move || disc.routing_health().known_peers)
+            })
+            .with_chain_head(rpc_chain_head)
+            .with_readiness(readiness.clone())
+            .with_gas_budget(config.rpc.query_gas_budget)
+            .with_num_shards(num_shards),
     );
 
     let mut consensus_backend = LiveConsensusBackend::new(engine)
