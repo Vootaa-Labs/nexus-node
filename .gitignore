@@ -60,6 +60,7 @@ tarpaulin-report.html
 # ---------------------------------------------------------------------------
 # Move contract build artefacts (aptos move compile / nexus-wallet move build)
 # ---------------------------------------------------------------------------
+/build/
 contracts/**/build/
 **/nexus-artifact/
 # Track pre-compiled bytecode in contracts/ — required by include_bytes! in tests

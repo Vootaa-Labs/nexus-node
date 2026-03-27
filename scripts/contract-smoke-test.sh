@@ -42,6 +42,11 @@ RECEIPT_POLL_INTERVAL=2
 WALLET_POLL_ATTEMPTS=1
 TX_NONCE=0
 
+# Isolated build directory — prevents smoke-test builds from overwriting
+# the git-tracked test-fixture bytecodes that encode dev-addresses.
+SMOKE_BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/nexus-smoke-build.XXXXXX")
+trap 'rm -rf "$SMOKE_BUILD_DIR"' EXIT
+
 PASS=0
 FAIL=0
 TESTS=()
@@ -244,6 +249,7 @@ echo "  Building counter..."
 if "$WALLET_CLI" move build \
     --package-dir "$COUNTER_DIR" \
     --named-addresses "$COUNTER_NAMED_ADDR" \
+    --output-dir "$SMOKE_BUILD_DIR/counter" \
     --skip-fetch 2>&1; then
     log_pass "counter: build"
 else
@@ -253,7 +259,7 @@ fi
 # 2b. Deploy
 echo "  Deploying counter..."
 DEPLOY_OUTPUT=$("$WALLET_CLI" move deploy \
-    --package-dir "$COUNTER_DIR" \
+    --package-dir "$SMOKE_BUILD_DIR/counter" \
     --rpc-url "$RPC_URL" \
     --key-file "$KEY_DIR/dilithium-secret.json" \
     --nonce "$TX_NONCE" \
@@ -378,6 +384,7 @@ echo "  Building token..."
 if "$WALLET_CLI" move build \
     --package-dir "$TOKEN_DIR" \
     --named-addresses "$TOKEN_NAMED_ADDR" \
+    --output-dir "$SMOKE_BUILD_DIR/token" \
     --skip-fetch 2>&1; then
     log_pass "token: build"
 else
@@ -387,7 +394,7 @@ fi
 # 3b. Deploy
 echo "  Deploying token..."
 TOKEN_DEPLOY=$("$WALLET_CLI" move deploy \
-    --package-dir "$TOKEN_DIR" \
+    --package-dir "$SMOKE_BUILD_DIR/token" \
     --rpc-url "$RPC_URL" \
     --key-file "$KEY_DIR/dilithium-secret.json" \
     --nonce "$TX_NONCE" \
@@ -517,6 +524,7 @@ echo "  Building escrow..."
 if "$WALLET_CLI" move build \
     --package-dir "$ESCROW_DIR" \
     --named-addresses "$ESCROW_NAMED_ADDR" \
+    --output-dir "$SMOKE_BUILD_DIR/escrow" \
     --skip-fetch 2>&1; then
     log_pass "escrow: build"
 else
@@ -526,7 +534,7 @@ fi
 # 4b. Deploy
 echo "  Deploying escrow..."
 ESCROW_DEPLOY=$("$WALLET_CLI" move deploy \
-    --package-dir "$ESCROW_DIR" \
+    --package-dir "$SMOKE_BUILD_DIR/escrow" \
     --rpc-url "$RPC_URL" \
     --key-file "$KEY_DIR/dilithium-secret.json" \
     --nonce "$TX_NONCE" \
@@ -619,6 +627,7 @@ echo "  Building voting..."
 if "$WALLET_CLI" move build \
     --package-dir "$VOTING_DIR" \
     --named-addresses "$VOTING_NAMED_ADDR" \
+    --output-dir "$SMOKE_BUILD_DIR/voting" \
     --skip-fetch 2>&1; then
     log_pass "voting: build"
 else
@@ -627,7 +636,7 @@ fi
 
 echo "  Deploying voting..."
 VOTING_DEPLOY=$("$WALLET_CLI" move deploy \
-    --package-dir "$VOTING_DIR" \
+    --package-dir "$SMOKE_BUILD_DIR/voting" \
     --rpc-url "$RPC_URL" \
     --key-file "$KEY_DIR/dilithium-secret.json" \
     --nonce "$TX_NONCE" \
@@ -729,6 +738,7 @@ echo "  Building registry..."
 if "$WALLET_CLI" move build \
     --package-dir "$REGISTRY_DIR" \
     --named-addresses "$REGISTRY_NAMED_ADDR" \
+    --output-dir "$SMOKE_BUILD_DIR/registry" \
     --skip-fetch 2>&1; then
     log_pass "registry: build"
 else
@@ -737,7 +747,7 @@ fi
 
 echo "  Deploying registry..."
 REGISTRY_DEPLOY=$("$WALLET_CLI" move deploy \
-    --package-dir "$REGISTRY_DIR" \
+    --package-dir "$SMOKE_BUILD_DIR/registry" \
     --rpc-url "$RPC_URL" \
     --key-file "$KEY_DIR/dilithium-secret.json" \
     --nonce "$TX_NONCE" \
@@ -818,6 +828,7 @@ echo "  Building multisig..."
 if "$WALLET_CLI" move build \
     --package-dir "$MULTISIG_DIR" \
     --named-addresses "$MULTISIG_NAMED_ADDR" \
+    --output-dir "$SMOKE_BUILD_DIR/multisig" \
     --skip-fetch 2>&1; then
     log_pass "multisig: build"
 else
@@ -826,7 +837,7 @@ fi
 
 echo "  Deploying multisig..."
 MULTISIG_DEPLOY=$("$WALLET_CLI" move deploy \
-    --package-dir "$MULTISIG_DIR" \
+    --package-dir "$SMOKE_BUILD_DIR/multisig" \
     --rpc-url "$RPC_URL" \
     --key-file "$KEY_DIR/dilithium-secret.json" \
     --nonce "$TX_NONCE" \

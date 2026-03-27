@@ -5,6 +5,7 @@
 # Usage: make <target>
 
 .PHONY: all check fmt clippy test test-vm test-all lint audit deny build release clean setup help
+.PHONY: verify-test-fixtures compile-test-fixtures pre-push-fast pre-push
 
 # Default: full lint + test
 all: lint test
@@ -200,12 +201,85 @@ devnet-cold-bench:
 		-i $(NEXUS_IMAGE)
 
 # ---------------------------------------------------------------------------
-# Pre-commit: run everything CI would check
+# Test Fixture Management
+# ---------------------------------------------------------------------------
+
+# All git-tracked bytecodes that MUST be compiled with dev-address.
+# Format: path:expected_hex_address_suffix (last N non-zero hex chars of the 32-byte address)
+FIXTURE_MVS := \
+	contracts/examples/counter/nexus-artifact/bytecode/counter.mv:cafe \
+	contracts/examples/token/nexus-artifact/bytecode/token.mv:cafe \
+	contracts/examples/escrow/nexus-artifact/bytecode/escrow.mv:cafe \
+	contracts/examples/voting/nexus-artifact/bytecode/voting.mv:cafe \
+	contracts/examples/registry/nexus-artifact/bytecode/registry.mv:cafe \
+	contracts/examples/multisig/nexus-artifact/bytecode/multisig.mv:cafe \
+	contracts/staking/nexus-artifact/bytecode/staking.mv:beef
+
+## Verify that all git-tracked .mv fixtures contain their expected dev-address
+## (i.e. they were NOT overwritten by a smoke-test build with a real deployer address)
+verify-test-fixtures:
+	@echo "=== Verifying test fixture bytecodes contain expected dev-address ==="
+	@fail=0; \
+	for entry in $(FIXTURE_MVS); do \
+		mv_path=$${entry%%:*}; \
+		addr_suffix=$${entry##*:}; \
+		padded=$$(printf '%060d' 0)$${addr_suffix}; \
+		pattern=$${padded: -64}; \
+		if [ ! -f "$$mv_path" ]; then \
+			echo "  MISS  $$mv_path (file not found)"; \
+			fail=1; \
+		elif xxd -p "$$mv_path" | tr -d '\n' | grep -q "$$pattern"; then \
+			echo "  OK    $$mv_path (0x$$addr_suffix)"; \
+		else \
+			echo "  FAIL  $$mv_path (expected 0x$$addr_suffix — fixture polluted?)"; \
+			fail=1; \
+		fi; \
+	done; \
+	if [ "$$fail" -ne 0 ]; then \
+		echo ""; \
+		echo "FAILED: One or more fixtures are missing or polluted."; \
+		echo "Run 'make compile-test-fixtures' to rebuild with dev-address."; \
+		exit 1; \
+	fi
+	@echo "=== All fixtures verified ==="
+
+## Recompile all contract fixtures with dev-address (0xCAFE) into git-tracked paths.
+## Requires nexus-wallet to be built first.
+compile-test-fixtures: build
+	@echo "=== Compiling test fixtures (dev-address) ==="
+	@WALLET=$$(cargo metadata --format-version 1 --no-deps 2>/dev/null \
+		| python3 -c "import sys,json; print(json.load(sys.stdin)['target_directory'])" 2>/dev/null)/release/nexus-wallet; \
+	if [ ! -x "$$WALLET" ]; then \
+		WALLET=target/release/nexus-wallet; \
+	fi; \
+	if [ ! -x "$$WALLET" ]; then \
+		echo "ERROR: nexus-wallet not found. Run 'make build' first."; \
+		exit 1; \
+	fi; \
+	for pkg_dir in contracts/examples/counter contracts/examples/token \
+		contracts/examples/escrow contracts/examples/voting \
+		contracts/examples/registry contracts/examples/multisig \
+		contracts/staking; do \
+		echo "  BUILD $$pkg_dir"; \
+		"$$WALLET" move build --package-dir "$$pkg_dir" --skip-fetch || exit 1; \
+	done
+	@echo "=== Done — verify with 'make verify-test-fixtures' ==="
+
+# ---------------------------------------------------------------------------
+# Pre-commit / Pre-push gates
 # ---------------------------------------------------------------------------
 
 ## Full pre-commit check (mirrors CI gates 1-3)
 pre-commit: lint security test test-vm
 	@echo "=== All pre-commit checks passed ==="
+
+## Fast pre-push gate: fmt + clippy + fixture integrity + unit tests
+pre-push-fast: fmt-check clippy verify-test-fixtures test
+	@echo "=== Pre-push (fast) passed ==="
+
+## Full pre-push gate: everything CI will check + fixture safety
+pre-push: lint security verify-test-fixtures test test-vm
+	@echo "=== Pre-push (full) passed ==="
 
 # ---------------------------------------------------------------------------
 # Help
@@ -238,6 +312,10 @@ help:
 	@echo "  make release      Build release binaries"
 	@echo "  make clean        Remove build artifacts"
 	@echo "  make pre-commit   Full pre-commit check (mirrors CI)"
+	@echo "  make pre-push-fast  Fast pre-push: fmt + clippy + fixtures + test"
+	@echo "  make pre-push     Full pre-push: lint + security + fixtures + test + VM"
+	@echo "  make verify-test-fixtures  Check .mv fixtures have dev-address 0xCAFE"
+	@echo "  make compile-test-fixtures  Recompile all .mv fixtures with dev-address"
 	@echo ""
 	@echo "Devnet Commands:"
 	@echo ""
