@@ -88,7 +88,7 @@ pub fn run(args: DeployArgs) -> anyhow::Result<()> {
         expiry_epoch: EpochNumber(u64::MAX),
         gas_limit: args.gas_limit,
         gas_price: 1,
-        target_shard: None,
+        target_shard: Some(rpc_client::resolve_target_shard(&args.rpc_url, &identity.address)?),
         payload: TransactionPayload::MovePublish {
             bytecode_modules: modules,
         },

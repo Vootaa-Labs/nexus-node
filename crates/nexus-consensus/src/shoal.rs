@@ -160,68 +160,71 @@ impl BftOrderer for ShoalOrderer {
         &mut self,
         dag: &dyn CertificateDag,
     ) -> Result<Option<CommittedBatch>, ConsensusError> {
-        let anchor_round = self.next_anchor_round();
-        let dag_round = dag.current_round();
+        loop {
+            let anchor_round = self.next_anchor_round();
+            let dag_round = dag.current_round();
 
-        // DAG must have advanced past the anchor round for commit safety.
-        if dag_round.0 <= anchor_round.0 {
-            return Ok(None);
-        }
-
-        // Find the leader for this anchor round.
-        let leader = match self.select_leader(anchor_round) {
-            Some(v) => v,
-            None => return Ok(None),
-        };
-
-        // Check if the leader has a certificate at the anchor round.
-        let leader_cert = match dag.get_certificate(leader, anchor_round) {
-            Some(cert) => cert,
-            None => {
-                // C-4: give the leader a grace period. Only permanently skip
-                // once the DAG has advanced beyond the recovery window.
-                let gap = dag_round.0.saturating_sub(anchor_round.0);
-                if gap > MAX_ANCHOR_RECOVERY_WINDOW {
-                    self.advance_anchor_round();
-                }
+            // DAG must have advanced past the anchor round for commit safety.
+            if dag_round.0 <= anchor_round.0 {
                 return Ok(None);
             }
-        };
 
-        // Compute the causal history (topological order).
-        let anchor_digest = leader_cert.cert_digest;
-        let certificates = dag.causal_history(&anchor_digest);
+            // Find the leader for this anchor round.
+            let leader = match self.select_leader(anchor_round) {
+                Some(v) => v,
+                None => return Ok(None),
+            };
 
-        if certificates.is_empty() {
-            return Ok(None);
+            // Check if the leader has a certificate at the anchor round.
+            let leader_cert = match dag.get_certificate(leader, anchor_round) {
+                Some(cert) => cert,
+                None => {
+                    // C-4: give the leader a grace period. Only permanently skip
+                    // once the DAG has advanced beyond the recovery window.
+                    let gap = dag_round.0.saturating_sub(anchor_round.0);
+                    if gap > MAX_ANCHOR_RECOVERY_WINDOW {
+                        self.advance_anchor_round();
+                        continue; // Try the next anchor round instead of stalling.
+                    }
+                    return Ok(None);
+                }
+            };
+
+            // Compute the causal history (topological order).
+            let anchor_digest = leader_cert.cert_digest;
+            let certificates = dag.causal_history(&anchor_digest);
+
+            if certificates.is_empty() {
+                return Ok(None);
+            }
+
+            // Produce the committed sub-DAG.
+            let reputation = self
+                .reputations
+                .get(&leader)
+                .copied()
+                .unwrap_or(ReputationScore::ZERO);
+
+            let anchor = ShoalAnchor {
+                cert_digest: anchor_digest,
+                round: anchor_round,
+                leader,
+                reputation_score: reputation,
+            };
+            self.committed_anchors.push(anchor);
+
+            let sequence = CommitSequence(self.next_sequence);
+            self.next_sequence += 1;
+            self.last_committed_round = Some(anchor_round);
+            self.advance_anchor_round();
+
+            return Ok(Some(CommittedBatch {
+                anchor: anchor_digest,
+                certificates,
+                sequence,
+                committed_at: TimestampMs(0), // Caller sets real timestamp.
+            }));
         }
-
-        // Produce the committed sub-DAG.
-        let reputation = self
-            .reputations
-            .get(&leader)
-            .copied()
-            .unwrap_or(ReputationScore::ZERO);
-
-        let anchor = ShoalAnchor {
-            cert_digest: anchor_digest,
-            round: anchor_round,
-            leader,
-            reputation_score: reputation,
-        };
-        self.committed_anchors.push(anchor);
-
-        let sequence = CommitSequence(self.next_sequence);
-        self.next_sequence += 1;
-        self.last_committed_round = Some(anchor_round);
-        self.advance_anchor_round();
-
-        Ok(Some(CommittedBatch {
-            anchor: anchor_digest,
-            certificates,
-            sequence,
-            committed_at: TimestampMs(0), // Caller sets real timestamp.
-        }))
     }
 
     fn update_reputation(&mut self, validator: ValidatorIndex, latency_ms: u32) {
@@ -395,6 +398,8 @@ mod tests {
     #[test]
     fn try_commit_skips_missing_anchor_after_recovery_window() {
         // C-4: after MAX_ANCHOR_RECOVERY_WINDOW rounds, permanently skip.
+        // With the loop fix, try_commit now continues to the next anchor
+        // after skipping, and commits if a valid leader is available.
         let mut orderer = ShoalOrderer::new(validators(4));
         let mut dag = InMemoryDag::new();
 
@@ -416,15 +421,18 @@ mod tests {
         }
         assert_eq!(dag.current_round(), RoundNumber(8));
 
-        // Within window: orderer stays at anchor 0.
-        // But now gap = 8 > 6 → skip.
+        // Anchor 0 → V0 missing → gap > 6 → skip to anchor 2.
+        // Anchor 2 → leader V1 → V1 cert at round 2 exists → COMMIT.
         let result = orderer.try_commit(&dag).unwrap();
-        assert!(result.is_none());
-        assert_eq!(orderer.next_anchor_round(), RoundNumber(2));
+        assert!(result.is_some(), "loop should skip stale anchor and commit next");
+        assert_eq!(result.unwrap().sequence, CommitSequence(0));
+        assert_eq!(orderer.next_anchor_round(), RoundNumber(4));
     }
 
     #[test]
     fn try_commit_skips_missing_anchor_and_commits_next_available_one() {
+        // With the loop fix, a single try_commit call skips the missing
+        // anchor AND commits at the next one in one operation.
         let mut orderer = ShoalOrderer::new(validators(4));
         let mut dag = InMemoryDag::new();
 
@@ -442,28 +450,18 @@ mod tests {
 
         // Build rounds 1..=8 with all needed certs.
         let mut prev = vec![d1, d2, d3];
-        let mut round_digests = vec![]; // track for later
         for r in 1..=8u64 {
             let c = make_cert(1, r, prev.clone(), 20 + r as u8);
-            round_digests.push(c.cert_digest);
             prev = vec![c.cert_digest];
             dag.insert_certificate(c).unwrap();
         }
 
-        // At this point DAG is at round 8, anchor 0 leader (V0) missing.
-        // try_commit should skip anchor 0 (gap = 8 > 6) → anchor advances to 2.
-        assert!(orderer.try_commit(&dag).unwrap().is_none());
-        assert_eq!(orderer.next_anchor_round(), RoundNumber(2));
-
-        // Anchor 2 leader: with rotation, anchor_round=2, rotation=2/2=1,
-        // so leader is candidates[1] = ValidatorIndex(1).
-        // Add V1's cert at round 2.
-        // We already have V1 certs at rounds 1..=8. V1 at round 2 exists
-        // as make_cert(1, 2, ...) which is already in the DAG. So:
+        // Single call: anchor 0 → V0 missing → skip → anchor 2 → V1 → commit.
         let result = orderer.try_commit(&dag).unwrap();
-        assert!(result.is_some());
+        assert!(result.is_some(), "loop should skip and commit in one call");
         let committed = result.unwrap();
         assert_eq!(committed.sequence, CommitSequence(0));
+        assert_eq!(orderer.next_anchor_round(), RoundNumber(4));
     }
 
     #[test]

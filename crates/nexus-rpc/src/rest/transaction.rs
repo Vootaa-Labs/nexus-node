@@ -45,23 +45,23 @@ async fn tx_status(
 /// Accepts a JSON-encoded [`SignedTransaction`], BCS-encodes it, and
 /// broadcasts it to peers via the P2P gossip layer.
 ///
-/// If the transaction's `target_shard` is `None`, the server auto-derives it
-/// from the sender address using Jump Consistent Hash.
+/// The transaction's `target_shard` must be set by the client. Transactions
+/// with `target_shard: None` are rejected because mutating the body after
+/// signing would invalidate the cryptographic signature.
 async fn submit_tx(
     State(state): State<Arc<AppState>>,
-    Json(mut tx): Json<SignedTransaction>,
+    Json(tx): Json<SignedTransaction>,
 ) -> RpcResult<Json<TxSubmitResponse>> {
     let broadcaster = state.broadcaster.as_ref().ok_or_else(|| {
         RpcError::Unavailable("transaction broadcast service not available".into())
     })?;
 
-    // Auto-derive target_shard when the client omitted it.
-    if tx.body.target_shard.is_none() && state.num_shards > 0 {
-        let derived = nexus_intent::resolver::shard_lookup::jump_consistent_hash(
-            &tx.body.sender,
-            state.num_shards,
-        );
-        tx.body.target_shard = Some(derived);
+    // Reject transactions without target_shard — mutating the signed body
+    // would break signature verification downstream.
+    if tx.body.target_shard.is_none() {
+        return Err(RpcError::BadRequest(
+            "target_shard is required; derive it client-side via GET /v2/shards".into(),
+        ));
     }
 
     let digest = tx.digest;
@@ -113,13 +113,14 @@ mod tests {
     /// Build a minimal valid `SignedTransaction` for testing.
     fn sample_signed_tx() -> SignedTransaction {
         let sender = AccountAddress([0x01; 32]);
+        let target_shard = nexus_intent::resolver::shard_lookup::jump_consistent_hash(&sender, 1);
         let body = TransactionBody {
             sender,
             sequence_number: 1,
             expiry_epoch: EpochNumber(1000),
             gas_limit: 50_000,
             gas_price: 1,
-            target_shard: None,
+            target_shard: Some(target_shard),
             payload: TransactionPayload::Transfer {
                 recipient: AccountAddress([0x02; 32]),
                 amount: Amount(100),
@@ -303,15 +304,8 @@ mod tests {
         let tx = sample_signed_tx();
         let body = serde_json::to_vec(&tx).unwrap();
 
-        // The handler auto-derives target_shard when None; mirror that for
-        // computing the expected BCS payload.
-        let mut expected_tx = tx.clone();
-        expected_tx.body.target_shard =
-            Some(nexus_intent::resolver::shard_lookup::jump_consistent_hash(
-                &expected_tx.body.sender,
-                1, // matches num_shards in the AppState above
-            ));
-        let expected_bcs = bcs::to_bytes(&expected_tx).unwrap();
+        // target_shard is already set by sample_signed_tx; BCS should match as-is.
+        let expected_bcs = bcs::to_bytes(&tx).unwrap();
 
         let req = Request::builder()
             .method("POST")

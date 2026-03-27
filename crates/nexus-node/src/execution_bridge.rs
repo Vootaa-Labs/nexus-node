@@ -604,13 +604,18 @@ async fn process_committed_batch<S: StateStorage>(
     let sequence = batch.sequence;
     let cert_count = batch.certificates.len();
 
-    // 2. Resolve committed certificates → transactions
+    // 2. Resolve committed certificates → transactions (deduplicated)
     let mut transactions: Vec<SignedTransaction> = Vec::new();
+    let mut seen_digests = std::collections::HashSet::new();
 
     for cert_digest in &batch.certificates {
         if let Some(cert) = dag.get_by_digest(cert_digest) {
             if let Some(txs) = ctx.batch_store.get(&cert.batch_digest) {
-                transactions.extend(txs);
+                for tx in txs {
+                    if seen_digests.insert(tx.digest) {
+                        transactions.push(tx);
+                    }
+                }
             } else {
                 debug!(
                     batch_digest = %cert.batch_digest,

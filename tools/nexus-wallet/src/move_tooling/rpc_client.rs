@@ -95,6 +95,30 @@ pub fn sign_transaction(identity: &Identity, body: TransactionBody) -> Result<Si
     })
 }
 
+/// Query the node for num_shards and compute target_shard for `sender`
+/// using Jump Consistent Hash. Returns `ShardId` to set on the
+/// `TransactionBody` **before** signing.
+pub fn resolve_target_shard(
+    rpc_url: &str,
+    sender: &AccountAddress,
+) -> Result<nexus_primitives::ShardId> {
+    let url = format!("{}/v2/shards", rpc_url.trim_end_matches('/'));
+    let resp = http_agent()
+        .get(&url)
+        .call()
+        .with_context(|| format!("GET {url}"))?;
+    let topo: ShardTopologyResponse = resp.into_json().context("parsing shard topology")?;
+    Ok(nexus_intent::resolver::shard_lookup::jump_consistent_hash(
+        sender,
+        topo.num_shards,
+    ))
+}
+
+#[derive(Deserialize)]
+struct ShardTopologyResponse {
+    num_shards: u16,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct TxSubmitResponse {
     #[serde(deserialize_with = "deserialize_digest_string")]

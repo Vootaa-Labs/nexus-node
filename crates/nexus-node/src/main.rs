@@ -352,6 +352,9 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
             engine
                 .insert_verified_certificate(cert)
                 .context("failed to replay restored certificate")?;
+            // Drain any committed batches produced by this insertion so the
+            // internal committed buffer does not overflow during replay.
+            let _ = engine.take_committed();
         }
         tracing::info!(count, "restored DAG certificates from disk (cold restart)");
     }
