@@ -50,7 +50,7 @@ services:
     hostname: nexus-node-1
     depends_on:
       nexus-node-0:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./devnet-n7s/validator-1/config:/nexus/config:ro
       - ./devnet-n7s/validator-1/keys:/nexus/keys:ro
@@ -84,7 +84,7 @@ services:
     hostname: nexus-node-2
     depends_on:
       nexus-node-0:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./devnet-n7s/validator-2/config:/nexus/config:ro
       - ./devnet-n7s/validator-2/keys:/nexus/keys:ro
@@ -118,7 +118,7 @@ services:
     hostname: nexus-node-3
     depends_on:
       nexus-node-0:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./devnet-n7s/validator-3/config:/nexus/config:ro
       - ./devnet-n7s/validator-3/keys:/nexus/keys:ro
@@ -152,7 +152,7 @@ services:
     hostname: nexus-node-4
     depends_on:
       nexus-node-0:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./devnet-n7s/validator-4/config:/nexus/config:ro
       - ./devnet-n7s/validator-4/keys:/nexus/keys:ro
@@ -186,7 +186,7 @@ services:
     hostname: nexus-node-5
     depends_on:
       nexus-node-0:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./devnet-n7s/validator-5/config:/nexus/config:ro
       - ./devnet-n7s/validator-5/keys:/nexus/keys:ro
@@ -220,7 +220,7 @@ services:
     hostname: nexus-node-6
     depends_on:
       nexus-node-0:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./devnet-n7s/validator-6/config:/nexus/config:ro
       - ./devnet-n7s/validator-6/keys:/nexus/keys:ro

@@ -132,6 +132,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libclang-dev
 
+      - name: Verify test fixtures (dev-address integrity)
+        run: make verify-test-fixtures
+
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --version 0.9.100 --locked
 
