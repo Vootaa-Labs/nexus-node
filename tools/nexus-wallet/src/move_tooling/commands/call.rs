@@ -98,7 +98,7 @@ pub fn run(args: CallArgs) -> anyhow::Result<()> {
             type_args,
             args: call_args,
         },
-        chain_id: 0,
+        chain_id: 1,
     };
 
     let signed_tx = rpc_client::sign_transaction(&identity, body)?;

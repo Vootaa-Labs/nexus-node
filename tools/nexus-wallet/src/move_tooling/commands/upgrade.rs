@@ -62,7 +62,7 @@ pub fn run(args: UpgradeArgs) -> Result<()> {
             contract,
             bytecode_modules: modules,
         },
-        chain_id: 0,
+        chain_id: 1,
     };
 
     let signed = rpc_client::sign_transaction(&identity, body)?;

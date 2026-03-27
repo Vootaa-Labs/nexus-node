@@ -73,7 +73,7 @@ pub fn run(args: ScriptArgs) -> Result<()> {
             type_args,
             args: call_args,
         },
-        chain_id: 0,
+        chain_id: 1,
     };
 
     let signed = rpc_client::sign_transaction(&identity, body)?;

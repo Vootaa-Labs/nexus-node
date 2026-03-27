@@ -448,7 +448,6 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
     let query_backend = Arc::new(
         StorageQueryBackend::new(
             store.clone(),
-            nexus_primitives::ShardId(0),
             epoch.clone(),
             commit_seq.clone(),
         )
@@ -458,7 +457,8 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
         })
         .with_chain_head(rpc_chain_head)
         .with_readiness(readiness.clone())
-        .with_gas_budget(config.rpc.query_gas_budget),
+        .with_gas_budget(config.rpc.query_gas_budget)
+        .with_num_shards(num_shards),
     );
 
     let mut consensus_backend = LiveConsensusBackend::new(engine)

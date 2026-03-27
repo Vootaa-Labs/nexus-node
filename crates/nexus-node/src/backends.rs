@@ -119,7 +119,7 @@ impl<S: StateStorage> StateView for StorageStateView<S> {
 /// `cf_receipts`. Health status reflects the current node startup state.
 pub struct StorageQueryBackend<S: StateStorage> {
     store: S,
-    shard_id: ShardId,
+    num_shards: u16,
     epoch: Arc<std::sync::atomic::AtomicU64>,
     commit_seq: Arc<std::sync::atomic::AtomicU64>,
     start_time: std::time::Instant,
@@ -137,18 +137,16 @@ impl<S: StateStorage> StorageQueryBackend<S> {
     /// Create a new storage-backed query adapter.
     ///
     /// * `store` — Shared storage backend (Clone = same backing data).
-    /// * `shard_id` — This node's shard assignment.
     /// * `epoch` — Shared atomic for the current epoch number.
     /// * `commit_seq` — Shared atomic for the latest commit sequence.
     pub fn new(
         store: S,
-        shard_id: ShardId,
         epoch: Arc<std::sync::atomic::AtomicU64>,
         commit_seq: Arc<std::sync::atomic::AtomicU64>,
     ) -> Self {
         Self {
             store,
-            shard_id,
+            num_shards: 1,
             epoch,
             commit_seq,
             start_time: std::time::Instant::now(),
@@ -183,10 +181,21 @@ impl<S: StateStorage> StorageQueryBackend<S> {
         self
     }
 
+    /// Set the total number of shards for cross-shard address resolution.
+    pub fn with_num_shards(mut self, n: u16) -> Self {
+        self.num_shards = n;
+        self
+    }
+
+    /// Resolve which shard owns `address` using Jump Consistent Hash.
+    fn resolve_shard(&self, address: &AccountAddress) -> ShardId {
+        nexus_intent::resolver::shard_lookup::jump_consistent_hash(address, self.num_shards)
+    }
+
     /// Build the storage key for an account balance lookup.
     fn balance_key(&self, address: &AccountAddress) -> Vec<u8> {
         let mut key = nexus_storage::AccountKey {
-            shard_id: self.shard_id,
+            shard_id: self.resolve_shard(address),
             address: *address,
         }
         .to_bytes();
@@ -334,7 +343,7 @@ impl<S: StateStorage> QueryBackend for StorageQueryBackend<S> {
             .collect::<Result<_, _>>()?;
 
         // Execute the view function against current state.
-        let state_view = StorageStateView::new(self.store.clone(), self.shard_id);
+        let state_view = StorageStateView::new(self.store.clone(), self.resolve_shard(&contract));
         let result = nexus_execution::query_view_with_budget(
             &state_view,
             contract,
@@ -1203,7 +1212,6 @@ mod tests {
     fn make_query_backend(store: MemoryStore) -> StorageQueryBackend<MemoryStore> {
         StorageQueryBackend::new(
             store,
-            ShardId(0),
             Arc::new(std::sync::atomic::AtomicU64::new(1)),
             Arc::new(std::sync::atomic::AtomicU64::new(42)),
         )
@@ -1268,7 +1276,7 @@ mod tests {
         let store = MemoryStore::new();
         let epoch = Arc::new(std::sync::atomic::AtomicU64::new(5));
         let commit = Arc::new(std::sync::atomic::AtomicU64::new(99));
-        let backend = StorageQueryBackend::new(store, ShardId(0), epoch, commit);
+        let backend = StorageQueryBackend::new(store, epoch, commit);
         let health = backend.health_status();
         assert_eq!(health.status, "healthy");
         assert_eq!(health.epoch, EpochNumber(5));

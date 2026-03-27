@@ -368,12 +368,13 @@ pub(crate) fn execute_single_tx(
                 );
             }
 
+            state_changes.extend(output.state_changes);
             Ok(TxExecutionRecord {
                 read_set,
                 write_set,
                 gas_used: output.gas_used,
                 status: output.status,
-                state_changes: output.state_changes,
+                state_changes,
             })
         }
         TransactionPayload::MovePublish {
@@ -406,12 +407,13 @@ pub(crate) fn execute_single_tx(
                 );
             }
 
+            state_changes.extend(output.state_changes);
             Ok(TxExecutionRecord {
                 read_set,
                 write_set,
                 gas_used: output.gas_used,
                 status: output.status,
-                state_changes: output.state_changes,
+                state_changes,
             })
         }
 
@@ -441,12 +443,13 @@ pub(crate) fn execute_single_tx(
                     value.clone(),
                 );
             }
+            state_changes.extend(output.state_changes);
             Ok(TxExecutionRecord {
                 read_set,
                 write_set,
                 gas_used: output.gas_used,
                 status: output.status,
-                state_changes: output.state_changes,
+                state_changes,
             })
         }
 
@@ -479,12 +482,13 @@ pub(crate) fn execute_single_tx(
                     value.clone(),
                 );
             }
+            state_changes.extend(output.state_changes);
             Ok(TxExecutionRecord {
                 read_set,
                 write_set,
                 gas_used: output.gas_used,
                 status: output.status,
-                state_changes: output.state_changes,
+                state_changes,
             })
         }
 

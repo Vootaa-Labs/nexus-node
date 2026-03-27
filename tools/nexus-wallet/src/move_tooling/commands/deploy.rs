@@ -92,7 +92,7 @@ pub fn run(args: DeployArgs) -> anyhow::Result<()> {
         payload: TransactionPayload::MovePublish {
             bytecode_modules: modules,
         },
-        chain_id: 0,
+        chain_id: 1,
     };
 
     let signed_tx = rpc_client::sign_transaction(&identity, body)?;
