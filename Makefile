@@ -270,15 +270,15 @@ compile-test-fixtures: build
 # ---------------------------------------------------------------------------
 
 ## Full pre-commit check (mirrors CI gates 1-3)
-pre-commit: lint security test test-vm
+pre-commit: lint security verify-test-fixtures test test-vm
 	@echo "=== All pre-commit checks passed ==="
 
 ## Fast pre-push gate: fmt + clippy + fixture integrity + unit tests
 pre-push-fast: fmt-check clippy verify-test-fixtures test
 	@echo "=== Pre-push (fast) passed ==="
 
-## Full pre-push gate: everything CI will check + fixture safety
-pre-push: lint security verify-test-fixtures test test-vm
+## Full pre-push gate: everything CI will check + fixture safety + KAT
+pre-push: lint security verify-test-fixtures test test-vm test-kat
 	@echo "=== Pre-push (full) passed ==="
 
 # ---------------------------------------------------------------------------
