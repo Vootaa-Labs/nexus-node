@@ -64,9 +64,9 @@ cargo build -p nexus-wallet
 
 # 5. Docker devnet
 docker build -t nexus-node .
-./scripts/setup-devnet.sh -o devnet -f
-docker compose up -d
-./scripts/smoke-test.sh
+make devnet-setup
+make devnet-up
+make devnet-smoke
 ```
 
 ## Make Targets

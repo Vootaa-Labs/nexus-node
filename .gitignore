@@ -84,6 +84,8 @@ tools/nexus-bench/target/
 # ---------------------------------------------------------------------------
 devnet/
 devnet-*/
+docker-compose.yml
+docker-compose-*.yml
 .tmp
 
 fuzz/target/
