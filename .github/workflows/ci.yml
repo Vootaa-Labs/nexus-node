@@ -865,10 +865,12 @@ jobs:
         run: docker build -t nexus-node .
 
       - name: Bootstrap local devnet
-        run: ./scripts/setup-devnet.sh -o devnet -f
+        run: |
+          ./scripts/setup-devnet.sh -o devnet-mvs-ci -f
+          ./scripts/generate-compose.sh -o docker-compose-mvs-ci.yml -d devnet-mvs-ci -n 7
 
       - name: Start local devnet
-        run: docker compose up -d
+        run: docker compose -f docker-compose-mvs-ci.yml up -d
 
       - name: Run container smoke test
         run: ./scripts/smoke-test.sh
@@ -878,7 +880,7 @@ jobs:
 
       - name: Collect container logs on failure
         if: failure()
-        run: docker compose logs --no-color > docker-compose.log
+        run: docker compose -f docker-compose-mvs-ci.yml logs --no-color > docker-compose.log
 
       - name: Upload container logs
         if: failure()
@@ -889,4 +891,4 @@ jobs:
 
       - name: Stop local devnet
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose-mvs-ci.yml down -v

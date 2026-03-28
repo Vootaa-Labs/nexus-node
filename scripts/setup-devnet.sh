@@ -211,13 +211,6 @@ for i in $(seq 0 $((NUM_VALIDATORS - 1))); do
     echo "      keys/                   ← validator key bundle"
     echo "      data/                   ← persistent state (empty)"
 done
-# ── Step 5: Generate docker-compose.yml ──────────────────────────────
-echo ""
-echo "=== Step 5: Generating docker-compose.yml ==="
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-COMPOSE_OUTPUT="$(dirname "$OUTPUT_DIR")/docker-compose.yml"
-COMPOSE_DEVNET_DIR="./$(basename "$OUTPUT_DIR")"
-"$SCRIPT_DIR/generate-compose.sh" -n "$NUM_VALIDATORS" -o "$COMPOSE_OUTPUT" -d "$COMPOSE_DEVNET_DIR"
 
 echo ""
-echo "Next: use docker-compose to launch the devnet."
+echo "Next: run generate-compose.sh or 'make devnet-setup' to create a compose file."

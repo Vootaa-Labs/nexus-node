@@ -58,18 +58,18 @@ jobs:
           ./scripts/setup-devnet.sh \
             -n 4 \
             -c nexus-ci-test \
-            -o ./devnet-ci \
+            -o ./devnet-smoke-ci \
             -f
 
       - name: Generate docker-compose for CI
         run: |
           ./scripts/generate-compose.sh \
             -n 4 \
-            -o ./docker-compose-ci.yml \
-            -d ./devnet-ci
+            -o ./docker-compose-smoke-ci.yml \
+            -d ./devnet-smoke-ci
 
       - name: Start cluster
-        run: docker compose -f docker-compose-ci.yml up -d
+        run: docker compose -f docker-compose-smoke-ci.yml up -d
 
       - name: Wait for all nodes to become ready (120s max)
         run: |
@@ -87,7 +87,7 @@ jobs:
             done
             if [ "$ELAPSED" -ge 120 ]; then
               echo "::error::node-$i failed to become ready within 120s"
-              docker compose -f docker-compose-ci.yml logs "nexus-node-$i" | tail -30
+              docker compose -f docker-compose-smoke-ci.yml logs "nexus-node-$i" | tail -30
               exit 1
             fi
           done
@@ -105,7 +105,7 @@ jobs:
           echo "Delta: $DELTA"
           if [ "$DELTA" -lt 1 ]; then
             echo "::error::Consensus not advancing ($COMMITS_BEFORE → $COMMITS_AFTER)"
-            docker compose -f docker-compose-ci.yml logs --tail=50
+            docker compose -f docker-compose-smoke-ci.yml logs --tail=50
             exit 1
           fi
           echo "✓ Consensus advancing (Δ=$DELTA)"
@@ -136,7 +136,7 @@ jobs:
       - name: Collect logs on failure
         if: failure()
         run: |
-          docker compose -f docker-compose-ci.yml logs --tail=100 > devnet-logs.txt 2>&1
+          docker compose -f docker-compose-smoke-ci.yml logs --tail=100 > devnet-logs.txt 2>&1
           echo "--- Last 100 lines per node ---"
           cat devnet-logs.txt
 
@@ -150,4 +150,4 @@ jobs:
 
       - name: Tear down cluster
         if: always()
-        run: docker compose -f docker-compose-ci.yml down -v
+        run: docker compose -f docker-compose-smoke-ci.yml down -v

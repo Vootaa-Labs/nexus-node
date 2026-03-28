@@ -154,26 +154,31 @@ clean:
 
 NEXUS_IMAGE ?= nexus-node
 NEXUS_NUM_VALIDATORS ?= 7
-NEXUS_NUM_SHARDS ?= 2
+NEXUS_NUM_SHARDS ?= 1
 
 ## Build container image (reuses cached base images, does not force pull)
 devnet-build:
 	@echo "=== Building $(NEXUS_IMAGE) container image ==="
 	DOCKER_BUILDKIT=1 docker build -t $(NEXUS_IMAGE) .
 
-## Generate devnet keys, genesis, per-node configs, and docker-compose.yml
+## Generate devnet keys, genesis, per-node configs, and docker-compose-n7s.yml
 devnet-setup:
 	@echo "=== Bootstrapping devnet layout ($(NEXUS_NUM_VALIDATORS) validators, $(NEXUS_NUM_SHARDS) shards) ==="
 	./scripts/setup-devnet.sh -n $(NEXUS_NUM_VALIDATORS) -s $(NEXUS_NUM_SHARDS) -o devnet-n7s -f
+	./scripts/generate-compose.sh \
+		-o docker-compose-n7s.yml \
+		-d devnet-n7s \
+		-n $(NEXUS_NUM_VALIDATORS)
+	@echo "✓ devnet-n7s/ + docker-compose-n7s.yml generated ($(NEXUS_NUM_VALIDATORS) validators, $(NEXUS_NUM_SHARDS) shards)"
 
 ## Start devnet (builds image + setup if needed)
 devnet-up: devnet-build devnet-setup
 	@echo "=== Starting devnet ==="
-	NEXUS_IMAGE=$(NEXUS_IMAGE) docker compose up -d
+	NEXUS_IMAGE=$(NEXUS_IMAGE) docker compose -f docker-compose-n7s.yml up -d
 
 ## Stop devnet containers
 devnet-down:
-	docker compose down
+	docker compose -f docker-compose-n7s.yml down
 
 ## Run all smoke tests against running devnet
 devnet-smoke:
@@ -186,6 +191,7 @@ devnet: devnet-up devnet-smoke
 ## Remove devnet state and containers
 devnet-clean: devnet-down
 	rm -rf devnet-n7s/
+	rm -f docker-compose-n7s.yml
 
 ## Run multi-node devnet TPS and latency benchmark sweep
 devnet-bench:
