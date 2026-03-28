@@ -151,6 +151,7 @@ clean:
 # Devnet (local Docker validator network)
 # ---------------------------------------------------------------------------
 .PHONY: devnet-build devnet-setup devnet-up devnet-down devnet-smoke devnet-clean devnet devnet-bench devnet-cold-bench
+.PHONY: devnet-contracts devnet-full devnet-logs devnet-status devnet-tail devnet-json ci-local-smoke
 
 NEXUS_IMAGE ?= nexus-node
 NEXUS_NUM_VALIDATORS ?= 7
@@ -180,18 +181,66 @@ devnet-up: devnet-build devnet-setup
 devnet-down:
 	docker compose -f docker-compose-n7s.yml down
 
-## Run all smoke tests against running devnet
+## Run smoke tests against running devnet (health checks only)
 devnet-smoke:
 	NEXUS_NUM_VALIDATORS=$(NEXUS_NUM_VALIDATORS) NEXUS_NUM_SHARDS=$(NEXUS_NUM_SHARDS) ./scripts/smoke-test.sh
+
+## Run contract smoke tests against running devnet (deploy/call/query)
+devnet-contracts:
 	./scripts/contract-smoke-test.sh
 
-## Full devnet lifecycle: build → setup → up → smoke → down
+## Full devnet lifecycle: build → setup → up → smoke → contracts → down
+devnet-full: devnet-up devnet-smoke devnet-contracts devnet-down
+
+## Full devnet lifecycle (legacy alias): build → setup → up → smoke
 devnet: devnet-up devnet-smoke
 
-## Remove devnet state and containers
-devnet-clean: devnet-down
-	rm -rf devnet-n7s/
-	rm -f docker-compose-n7s.yml
+## Remove all devnet state, containers, and compose files
+devnet-clean:
+	-docker compose -f docker-compose-n7s.yml down --remove-orphans 2>/dev/null
+	-docker compose -f docker-compose-mvs-ci.yml down --remove-orphans 2>/dev/null
+	-docker compose -f docker-compose-smoke-ci.yml down --remove-orphans 2>/dev/null
+	rm -rf devnet-n7s devnet-mvs-ci devnet-smoke-ci
+	rm -f docker-compose-n7s.yml docker-compose-mvs-ci.yml docker-compose-smoke-ci.yml
+	@echo "✓ devnet artifacts cleaned"
+
+## Follow devnet container logs
+devnet-logs:
+	docker compose -f docker-compose-n7s.yml logs --follow --tail=50
+
+## Check health of all devnet validators
+devnet-status:
+	@echo "Checking node health..."
+	@for i in $$(seq 0 $$(($(NEXUS_NUM_VALIDATORS)-1))); do \
+		PORT=$$((8080 + $$i)); \
+		STATUS=$$(curl -sf "http://127.0.0.1:$$PORT/v2/health" | jq -r '.status' 2>/dev/null || echo "UNREACHABLE"); \
+		printf "  validator-$$i (:$$PORT): $$STATUS\n"; \
+	done
+
+## Tail logs for a specific validator (usage: make devnet-tail N=0)
+N ?= 0
+devnet-tail:
+	docker compose -f docker-compose-n7s.yml logs nexus-node-$(N) --follow --tail=100
+
+## Print genesis.json from current devnet setup
+devnet-json:
+	@cat devnet-n7s/genesis.json 2>/dev/null || echo "Run 'make devnet-setup' first"
+
+## Local equivalent of ci.yml move-vm-smoke job (isolated context)
+ci-local-smoke: devnet-build
+	@echo "==> ci-local-smoke: generating devnet (devnet-mvs-ci/)..."
+	@./scripts/setup-devnet.sh -o devnet-mvs-ci -n $(NEXUS_NUM_VALIDATORS) -s $(NEXUS_NUM_SHARDS) -f
+	@./scripts/generate-compose.sh -o docker-compose-mvs-ci.yml -d devnet-mvs-ci -n $(NEXUS_NUM_VALIDATORS)
+	@echo "==> ci-local-smoke: starting containers..."
+	@docker compose -f docker-compose-mvs-ci.yml up -d
+	@echo "==> ci-local-smoke: waiting for readiness..."
+	@sleep 10
+	@echo "==> ci-local-smoke: running smoke test..."
+	@NEXUS_NUM_SHARDS=$(NEXUS_NUM_SHARDS) ./scripts/smoke-test.sh; \
+		RESULT=$$?; \
+		docker compose -f docker-compose-mvs-ci.yml down --remove-orphans; \
+		rm -rf devnet-mvs-ci docker-compose-mvs-ci.yml; \
+		exit $$RESULT
 
 ## Run multi-node devnet TPS and latency benchmark sweep
 devnet-bench:
