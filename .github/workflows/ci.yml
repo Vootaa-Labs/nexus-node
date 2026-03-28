@@ -854,7 +854,7 @@ jobs:
 
       - name: Validate default move-vm test surface
         run: |
-          cargo test -p nexus-execution --lib aptos_vm
+          cargo test -p nexus-execution --lib nexus_vm
           cargo test -p nexus-wallet --test move_cli_integration
 
       - name: Build release toolchain for smoke scripts

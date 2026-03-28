@@ -18,7 +18,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RPC_CONFIG="$REPO_ROOT/crates/nexus-config/src/rpc.rs"
-ACCESS_POLICY="$REPO_ROOT/Docs/Ops/Testnet_Access_Policy.md"
+ACCESS_POLICY="$REPO_ROOT/Docs/en/Ops/Testnet_Access_Policy.md"
 
 if [[ ! -f "$RPC_CONFIG" ]]; then
   echo "ERROR: RPC config file not found: $RPC_CONFIG" >&2
@@ -67,9 +67,14 @@ while IFS= read -r line; do
     default_norm="${default_raw// /}"
     default_norm="${default_norm//,/}"
 
-    # Handle "10¹⁸" → 1000000000000000000
+    # Strip trailing unit suffixes (e.g. "voo", "ms", "NXS")
+    default_norm="${default_norm%%[a-zA-Z]*}"
+
+    # Handle "10¹⁸" → 1000000000000000000, "10⁹" → 1000000000
     if [[ "$default_norm" == "10¹⁸" ]]; then
       default_norm="1000000000000000000"
+    elif [[ "$default_norm" == "10⁹" ]]; then
+      default_norm="1000000000"
     fi
 
     # Skip non-numeric values

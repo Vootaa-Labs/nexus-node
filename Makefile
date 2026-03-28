@@ -80,9 +80,10 @@ doctest:
 	cargo test --doc
 
 ## Run ignored tests (crypto KAT vectors)
-## --lib --tests excludes doctests (rustdoc runs `ignore`-fenced blocks under --ignored)
+## Scoped to nexus-crypto to match CI (crypto-kat job).
+## The workspace-wide --ignored includes scenario_tests which require a running devnet.
 test-kat:
-	cargo test --lib --tests -- --ignored --test-threads=1
+	cargo test -p nexus-crypto --lib --tests -- --ignored --test-threads=1
 
 ## All tests: nextest + doc-tests + KAT
 test-all: nextest doctest test-kat
