@@ -7,12 +7,15 @@ Read this file first, then `.github/Code_Summary.md`, then `README.md` when you 
 
 ## Workspace Snapshot
 
+- Version: v0.1.14
+- Branch: dev/v0.1.14
 - Workspace members: 15 Cargo packages.
 - Core libraries: primitives, crypto, network, storage, config, consensus, execution, intent, rpc.
 - Assembly crate: `nexus-node` as both library and `nexus-node` binary.
 - Tool crates: `nexus-keygen`, `nexus-genesis`, `nexus-wallet`, `nexus-bench`.
 - Test support: `tests/nexus-test-utils`.
-- Non-code operational roots: `Makefile`, `Dockerfile`, `docker-compose.yml`, `.github/workflows/`, `scripts/`.
+- Non-code operational roots: `Makefile`, `Dockerfile`, `.github/workflows/`, `scripts/`.
+- Docker compose files: generated at runtime as `docker-compose-<context>.yml` (not git-tracked).
 
 ## Read Budget
 

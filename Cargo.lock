@@ -3495,7 +3495,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-bench"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "anyhow",
  "bcs",
@@ -3523,7 +3523,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-config"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "hex",
  "libp2p-identity",
@@ -3541,7 +3541,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-consensus"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "bcs",
  "futures",
@@ -3560,7 +3560,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-crypto"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "blake3",
  "getrandom 0.3.4",
@@ -3580,7 +3580,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-execution"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "bcs",
  "blake3",
@@ -3608,7 +3608,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-genesis"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "anyhow",
  "clap",
@@ -3624,7 +3624,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-intent"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "bcs",
  "blake3",
@@ -3646,7 +3646,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-keygen"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "anyhow",
  "clap",
@@ -3736,7 +3736,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-network"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "async-trait",
  "bcs",
@@ -3761,7 +3761,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-node"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "anyhow",
  "bcs",
@@ -3793,7 +3793,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-primitives"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "bcs",
  "blake3",
@@ -3806,7 +3806,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-rpc"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "axum",
  "axum-extra",
@@ -3839,7 +3839,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-storage"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "bcs",
  "blake3",
@@ -3857,7 +3857,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-test-utils"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "anyhow",
  "axum",
@@ -3890,7 +3890,7 @@ dependencies = [
 
 [[package]]
 name = "nexus-wallet"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "anyhow",
  "bcs",

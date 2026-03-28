@@ -19,7 +19,7 @@
 | `contracts/` | sample Move packages used by tooling and smoke tests |
 | `scripts/` | environment checks, devnet setup, smoke tests |
 | `.github/workflows/` | CI, benchmark, fuzz, and release automation |
-| `Dockerfile`, `docker-compose.yml` | container build and 4-validator devnet layout |
+| `Dockerfile`, `docker-compose-<context>.yml` | container build and devnet layout (compose files generated at runtime, not git-tracked) |
 | `proofs/` | Agda, TLA+, Haskell, Move Prover, differential and property-test assets |
 
 ## Production Crate Map
@@ -76,7 +76,7 @@
 | How do I bring up a local developer flow? | `README.md` → `scripts/setup-devnet.sh` → `scripts/smoke-test.sh` → `scripts/contract-smoke-test.sh` |
 | How does intent become concrete work? | `crates/nexus-intent/Compiler_Context.md` or `Resolver_Context.md` → crate root → one implementation file |
 | How do APIs reach the node? | `crates/nexus-rpc/Rest_Context.md` → `crates/nexus-rpc/src/server.rs` → `crates/nexus-node/src/backends.rs` |
-| How is devnet assembled? | `README.md` → `scripts/setup-devnet.sh` → `docker-compose.yml` |
+| How is devnet assembled? | `README.md` → `scripts/setup-devnet.sh` → `docker-compose-n7s.yml` (generated) |
 | Where are integration tests? | `tests/nexus-test-utils/Test_Context.md` → `Test_Summary.md` → target suite |
 
 ## What To Avoid Loading By Default
