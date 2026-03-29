@@ -510,8 +510,8 @@ json_output="{\"verdict\":\"$verdict\",\"total\":$total_checks,\"pass\":$total_p
 for i in {1..${#CHECK_NAMES[@]}}; do
   [[ $i -gt 1 ]] && json_output+=","
   detail="${CHECK_DETAILS[$i]:-}"
-  # Escape double quotes in detail.
-  detail="${detail//\"/\\"}"
+  # Escape double quotes in detail (zsh-safe: avoid outer double-quote context).
+  detail=${detail//\"/\\\"}
   json_output+="{\"name\":\"${CHECK_NAMES[$i]}\",\"result\":\"${CHECK_RESULTS[$i]}\",\"detail\":\"$detail\"}"
 done
 

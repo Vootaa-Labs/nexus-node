@@ -761,6 +761,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: [test, test-vm, check]
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v6.0.2
 
@@ -803,7 +805,7 @@ jobs:
         run: ./scripts/smoke-test.sh
 
       - name: Run contract smoke test
-        run: ./scripts/contract-smoke-test.sh
+        run: ./scripts/contract-smoke-test.sh -k ./devnet-mvs-ci/validator-0/keys
 
       - name: Collect container logs on failure
         if: failure()
