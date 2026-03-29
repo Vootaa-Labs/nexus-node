@@ -49,13 +49,14 @@ make devnet-smoke
 | `recovery` | 5 | snapshot export/import、migration、prune |
 | `coverage` | 6 | 覆盖率门槛 |
 | `crypto-kat` | 7 | 全部密码学 KAT 向量 |
-| `move-vm-smoke` | 8 | Move VM 编译与执行冒烟 |
+| `move-vm-smoke` | 8 | Move VM 校验 + 7 节点 devnet + 容器/合约冒烟 |
 
 ### 1.2 文档一致性
 
-在发布前核对以下文档是否已同步到 `v0.1.13` 基线：
+在发布前核对以下文档是否已同步到 `v0.1.14` 基线：
 
 - `Docs/zh/Ops/Testnet_Operations_Guide.md`
+- `Docs/en/Ops/Testnet_Access_Policy.md`
 - `Docs/zh/Ops/Testnet_Access_Policy.md`
 - `Docs/zh/Ops/Testnet_SLO.md`
 - `Docs/zh/Ops/Schema_Migration_Guide.md`

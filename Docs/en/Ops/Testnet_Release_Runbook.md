@@ -52,7 +52,7 @@ All of the following CI gates must be green on the release branch:
 | `recovery` | 5 | snapshot export/import, migration, prune |
 | `coverage` | 6 | tarpaulin ≥ threshold |
 | `crypto-kat` | 7 | known-answer vectors for all crypto |
-| `move-vm-smoke` | 8 | Move VM compile + execute round-trip |
+| `move-vm-smoke` | 8 | Move VM validation plus 7-node devnet, container smoke, and contract smoke |
 
 ### 1.2 Verify soak & fault injection tests
 
@@ -63,7 +63,7 @@ cargo test -p nexus-test-utils --lib fault_injection_tests  # 20 tests
 
 ### 1.3 Confirm access tiers
 
-Review `Docs/en/Ops/Testnet_Access_Policy.md` — ensure quota limits for public / developer / operator tiers match intended capacity.
+Review both `Docs/en/Ops/Testnet_Access_Policy.md` and `Docs/zh/Ops/Testnet_Access_Policy.md` — ensure quota limits and configuration defaults stay synchronized across code and bilingual operator docs.
 
 ---
 
@@ -187,7 +187,7 @@ Periodic checks: health, consensus advance, metrics freshness, block-height delt
 | Contract smoke | 6/6 phases pass |
 | Startup validation | All nodes healthy ≤ 90 s |
 | Soak (if run) | No degradation alerts |
-| Access policy | Quota config matches `Testnet_Access_Policy.md` |
+| Access policy | Quota config matches both bilingual `Testnet_Access_Policy.md` docs |
 
 **Go** → proceed to Step 6 (promote to public).  
 **No-Go** → proceed to Step 7 (rollback).

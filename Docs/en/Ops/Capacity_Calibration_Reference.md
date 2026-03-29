@@ -1,6 +1,6 @@
 # Nexus Capacity Calibration Reference
 
-> Version: `v0.1.13`
+> Version: `v0.1.14`
 > Audience: operators, release engineers, RPC owners
 
 ## 1. Gas Budget Calibration Results
@@ -101,11 +101,12 @@ When quota or gas-related defaults change, review all of the following together:
 
 - `crates/nexus-config/src/rpc.rs`
 - `Docs/en/Ops/Testnet_Access_Policy.md`
+- `Docs/zh/Ops/Testnet_Access_Policy.md`
 - `Docs/en/Ops/Testnet_SLO.md`
 - `Docs/en/Ops/Testnet_Release_Runbook.md`
 - `scripts/config-doc-drift-check.sh`
 
-If only one of these moves, the operator surface becomes ambiguous.
+The CI drift gate compares code against both access-policy docs. If only one of these moves, the operator surface becomes ambiguous.
 
 ## 5. Multi-Shard And HTLC Calibration
 

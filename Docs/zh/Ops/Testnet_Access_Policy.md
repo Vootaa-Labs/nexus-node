@@ -1,106 +1,171 @@
 # Nexus 公开测试网访问与滥用处置策略
 
-## 1. 文档目的
+_版本 0.1.14_
 
-本文定义 `v0.1.13` 基线下公开测试网的访问边界、配额分层、认证方式和滥用处置原则。它服务于三类对象：
+---
 
-- 节点与平台运维
-- 对外开放 RPC 的发布负责人
-- 接入测试网的开发者与合作方
+## 1. 概述
 
-## 2. 当前接口面与适用范围
+本文定义 Nexus 公开 devnet/testnet RPC 端点的访问规则，包括速率限制、认证分层、faucet 策略与滥用处置流程。
 
-当前仓库中实际可见的公开接口面是：
+---
 
-- REST
-- WebSocket
-- MCP
+## 2. 访问分层
 
-本文的配额与处置策略主要针对 HTTP/REST 与配套公开入口；若对 MCP 暴露能力，应复用相同的身份分层与审计要求。
+| 分层 | 识别方式 | 说明 |
+|------|----------|------|
+| **匿名** | 无 `x-api-key` 请求头 | 所有调用方默认档位，配额最低。 |
+| **已认证** | 携带合法 `x-api-key` | 已注册开发者，中档配额。 |
+| **白名单** | `x-api-key` 位于白名单集合 | 可信合作方或审计方，配额最高。 |
 
-## 3. 访问分层
+当配置 API key 时，HTTP 请求头中的 `x-api-key` 至少需要 16 字节。若启用 API key，则启动时强制要求 TLS。
 
-### 3.1 匿名访问
+---
 
-- 无 `x-api-key` 请求头
-- 仅用于公开只读试用
-- 应施加最低配额与最严格速率限制
+## 3. 速率限制
 
-### 3.2 已认证开发者
+### 3.1 全局每 IP 限制
 
-- 携带合法 `x-api-key`
-- 用于 SDK 集成、测试与持续查询
-- 可获得较高但仍受控的请求额度
+所有端点共享统一的每 IP 速率限制：
 
-### 3.3 白名单合作方
+| 参数 | 默认值 |
+|------|--------|
+| Per-IP RPS | 100 |
+| Window | 1 second |
 
-- `x-api-key` 属于白名单集合
-- 用于审计、压测协作或重点集成
-- 可分配最高额度，但仍必须保留审计与手动熔断能力
+超过全局限制时返回 **429 Too Many Requests**，并附带 `retry-after` 响应头。
 
-## 4. 配额原则
+### 3.2 按端点类别配额 (E-2)
 
-### 4.1 全局原则
+高计算成本端点按类别和调用方分层分别限流，单位为每分钟请求数：
 
-- 未认证请求默认走最低配额
-- 高成本接口必须比健康检查或元数据接口更低频
-- faucet、proof、query、session/provenance 类接口应分别设置限额
-- 所有公网入口都应保留按 IP、按 API key、按路径三个维度的限速能力
+| 端点类别 | 路径 | Anonymous | Authenticated | Whitelisted |
+|----------|------|-----------|---------------|-------------|
+| **Query** | `/v2/contract/query` | 60 rpm | 600 rpm | 3 000 rpm |
+| **Intent** | `/v2/intent/submit`, `/v2/intent/estimate-gas` | 30 rpm | 300 rpm | 1 500 rpm |
+| **MCP** | `/v2/mcp/*` | 30 rpm | 300 rpm | 1 500 rpm |
 
-### 4.2 建议分类
+每个类别都**独立计数**，耗尽 query 配额不会影响 intent 或 MCP 配额。
 
-1. 低成本元数据接口：`/health`、`/ready`、网络和共识状态查询
-2. 中成本查询接口：账户、合约、分片、交易状态查询
-3. 高成本证明接口：state commitment、inclusion proof、exclusion proof
-4. 有状态或资源敏感接口：faucet、session、provenance、MCP 工具执行
+配额保护端点的响应头包括：
 
-## 5. 认证与传输要求
+- `x-quota-tier` — 解析出的调用方分层
+- `x-quota-class` — 端点类别（query / intent / mcp）
+- `x-quota-remaining` — 当前窗口剩余令牌数
 
-- 若启用 API key，公网入口应启用 TLS 或反向代理 TLS
-- API key 不应硬编码在镜像中，应通过安全配置注入
-- API key 泄露后需要支持快速吊销与轮换
+### 3.3 Query gas 预算
 
-## 6. 滥用判定
+只读 view 查询（`/v2/contract/query`）受 gas 预算限制：
 
-以下行为应视为滥用或疑似滥用：
+| 参数 | 默认值 |
+|------|--------|
+| Gas budget | 10 000 000 units |
+| Timeout | 5 000 ms |
 
-- 高频 faucet 请求
-- 反复触发 proof 或高 gas query 以制造资源压力
-- 扫描式枚举路径或参数
-- 长时间维持异常高错误率或超时率
-- 通过 MCP 暴露面反复触发重型工具
+超过 gas 预算或超时的查询分别返回 **400** 或 **503**。响应中会携带 `gas_used` 与 `gas_budget` 字段，便于观测与审计。
 
-## 7. 处置流程
+---
 
-### 7.1 自动化处置
+## 4. Faucet 策略
 
-- 先做限速
-- 再做临时封禁
-- 对高风险 key 执行立即吊销
+`/v2/faucet/mint` 端点用于发放测试网开发代币。
 
-### 7.2 人工处置
+| 参数 | 默认值 |
+|------|--------|
+| Enabled | `false`（必须显式开启） |
+| Amount per request | 10⁹ voo (1 NXS) |
+| Per-address limit | 10 requests per hour |
 
-- 记录来源 IP、API key、时间窗、命中路径、响应码与限流次数
-- 评估是否需要调整配额或临时关闭部分高成本接口
-- 若影响到公开测试网稳定性，按发布或回滚流程执行 go or no-go 决策
+- 每个地址独立计数。
+- 当地址追踪表达到上限（100 000 条）时，新地址请求按 fail-closed 策略拒绝，直到旧条目过期。
 
-## 8. 与当前代码基线的关系
+---
 
-当前仓库已经明确存在：
+## 5. 审计日志
 
-- 健康与就绪端点
-- 网络、共识、账户、合约、proof、分片等 REST 路由
-- faucet 接口
-- MCP 适配层
+所有请求都会以结构化 JSON 记录到 `nexus::audit` tracing target。记录字段包括：
 
-因此本策略应与实际 `RpcConfig` 默认值、反向代理 TLS 开关以及发布运行手册一起维护。
+| 字段 | 说明 |
+|------|------|
+| `method` | HTTP 方法 |
+| `path` | 请求 URI 路径 |
+| `status` | HTTP 响应码 |
+| `latency_ms` | 端到端时延 |
+| `ip` | 客户端 IP（来自 TCP peer，而非 `X-Forwarded-For`） |
+| `request_id` | 唯一 `x-request-id` 头 |
+| `tier` | 解析后的配额分层 |
+| `endpoint_class` | 端点类别（query / intent / mcp） |
 
-## 9. 变更管理
+合约 query handler 还会追加 `gas_used`、`gas_budget` 与 `elapsed_ms` 等 gas 指标。
+
+---
+
+## 6. 滥用检测与响应
+
+### 6.1 自动化保护
+
+- **Rate limiting** — 每 IP token-bucket，并在异常状态下 fail-closed。
+- **Quota tiering** — 高成本端点对匿名流量采用更严格配额。
+- **Gas budget** — 防止 view 查询消耗无限资源。
+- **Timeout** — 超长查询在截止时间后终止。
+- **Body size limit** — 请求体上限 512 KiB。
+- **API key authentication** — 启用后，变更类端点（POST）必须携带合法 key。
+
+### 6.2 人工响应流程
+
+当自动化保护不足时：
+
+1. **识别** — 检查 `nexus::audit` 日志中的异常模式，如高请求率、轮换 IP 的重复 429、gas 预算违规等。
+2. **阻断** — 在反向代理或防火墙层封禁来源 IP，而不是直接在应用内操作，以获得即时效果。
+3. **吊销** — 从 `api_keys` 配置中移除受损 key，并重启节点生效。
+4. **升级** — 若攻击针对协议级资源（如存储放大），需要通知核心团队评估更深层的缓解措施。
+
+### 6.3 事后复盘
+
+发生滥用事件后：
+
+- 归档覆盖事件时间窗的审计日志。
+- 评估是否需要收紧自动化限额。
+- 若发现新的攻击路径，更新本文档。
+
+---
+
+## 7. 配置参考
+
+所有参数都位于 `nexus-config` 的 `RpcConfig` 中，可通过节点配置文件或环境变量覆盖。
+
+| Field | Type | Default | Notes |
+|-------|------|---------|-------|
+| `rate_limit_per_ip_rps` | u32 | 100 | Global per-IP RPS |
+| `query_rate_limit_anonymous_rpm` | u32 | 60 | Query class, anonymous |
+| `query_rate_limit_authenticated_rpm` | u32 | 600 | Query class, authenticated |
+| `query_rate_limit_whitelisted_rpm` | u32 | 3 000 | Query class, whitelisted |
+| `intent_rate_limit_anonymous_rpm` | u32 | 30 | Intent class, anonymous |
+| `intent_rate_limit_authenticated_rpm` | u32 | 300 | Intent class, authenticated |
+| `intent_rate_limit_whitelisted_rpm` | u32 | 1 500 | Intent class, whitelisted |
+| `mcp_rate_limit_anonymous_rpm` | u32 | 30 | MCP class, anonymous |
+| `mcp_rate_limit_authenticated_rpm` | u32 | 300 | MCP class, authenticated |
+| `mcp_rate_limit_whitelisted_rpm` | u32 | 1 500 | MCP class, whitelisted |
+| `query_gas_budget` | u64 | 10 000 000 | Max gas per view query |
+| `query_timeout_ms` | u64 | 5 000 | View query timeout |
+| `faucet_enabled` | bool | false | Enable faucet endpoint |
+| `faucet_amount` | u64 | 10⁹ voo | Tokens per faucet request |
+| `faucet_per_addr_limit_per_hour` | u32 | 10 | Faucet per-address hourly limit |
+| `api_keys` | Vec | [] | Valid API keys (min 16 bytes each) |
+| `whitelisted_api_keys` | Vec | [] | Whitelisted-tier keys (subset of api_keys) |
+| `cors_allowed_origins` | Vec | [] | Fail-closed when empty |
+
+---
+
+## 8. 变更管理
 
 每次发版前至少核对以下内容：
 
+- `Docs/en/Ops/Testnet_Release_Runbook.md`
 - `Docs/zh/Ops/Testnet_Release_Runbook.md`
+- `Docs/en/Ops/Capacity_Calibration_Reference.md`
 - `Docs/zh/Ops/Capacity_Calibration_Reference.md`
+- `Docs/en/Ops/Testnet_SLO.md`
 - `Docs/zh/Ops/Testnet_SLO.md`
 
-若配额或认证边界发生变化，应先更新这份策略，再更新发布核对清单。
+若配额或认证边界发生变化，必须先同步更新中英文访问策略文档，再更新发布清单和 CI 校验说明。

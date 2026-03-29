@@ -8,7 +8,6 @@ Read this file first, then `.github/Code_Summary.md`, then `README.md` when you 
 ## Workspace Snapshot
 
 - Version: v0.1.14
-- Branch: dev/v0.1.14
 - Workspace members: 15 Cargo packages.
 - Core libraries: primitives, crypto, network, storage, config, consensus, execution, intent, rpc.
 - Assembly crate: `nexus-node` as both library and `nexus-node` binary.
@@ -70,7 +69,7 @@ Read this file first, then `.github/Code_Summary.md`, then `README.md` when you 
 | Primitives and protocol types | `crates/nexus-primitives/Primitives_Context.md` | `Primitives_Summary.md`, then `ids.rs`, `digest.rs`, `address.rs` |
 | Shared tests and fixtures | `tests/nexus-test-utils/Test_Context.md` | `Test_Summary.md`, then target suite or fixture module |
 | Local developer bring-up | `README.md` | `scripts/setup-devnet.sh`, `scripts/smoke-test.sh`, `scripts/contract-smoke-test.sh` |
-| Tooling or ops | `.github/Code_Summary.md` | relevant file in `tools/`, `scripts/`, `Dockerfile`, `docker-compose.yml`, or workflow |
+| Tooling or ops | `.github/Code_Summary.md` | relevant file in `tools/`, `scripts/`, `Dockerfile`, `docker-compose-<context>.yml`, or workflow |
 
 ## Known Cross-Crate Boundaries
 

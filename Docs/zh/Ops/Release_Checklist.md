@@ -40,9 +40,9 @@
 | **2.9** Coverage (≥ 阈值) | [ ] 通过 | |
 | **2.10** Crypto KAT (known-answer vectors) | [ ] 通过 | |
 | **2.11** Workspace Check (feature-flag matrix) | [ ] 通过 | |
-| **2.12** Move VM Smoke | [ ] 通过 | |
+| **2.12** Move VM + Devnet Smoke | [ ] 通过 | |
 | **2.13** Capacity Curves Gate (D-2) | [ ] 通过 | |
-| **2.14** Config-Doc Drift Check (E-1) | [ ] 通过 | |
+| **2.14** Bilingual Config-Doc Drift Check (E-1) | [ ] 通过 | |
 | **2.15** Gas Calibration Gate (D-1) | [ ] 通过 | |
 | **2.16** Release Go/No-Go (E-2) | [ ] 通过 | |
 | **2.17** Exclusion Proof Tests (L-phase) | [ ] 通过 | |
@@ -69,7 +69,7 @@
 
 ## 阶段 3：文档一致性
 
-- [ ] **3.1** `Docs/zh/Ops/Testnet_Access_Policy.md` 与 `RpcConfig` 默认值一致
+- [ ] **3.1** `Docs/en/Ops/Testnet_Access_Policy.md` 与 `Docs/zh/Ops/Testnet_Access_Policy.md` 均与 `RpcConfig` 默认值一致
 - [ ] **3.2** `Docs/zh/Ops/Capacity_Calibration_Reference.md` 校准数据为最新
 - [ ] **3.3** `Docs/zh/Ops/Testnet_Release_Runbook.md` 步骤与实际流程一致
 - [ ] **3.4** `Docs/zh/Ops/Epoch_Operations_Runbook.md` 已审阅

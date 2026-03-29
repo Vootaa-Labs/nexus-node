@@ -39,8 +39,8 @@
 
 ### 2.1 当前默认值
 
-以下默认值同时存在于 `RpcConfig` (代码) 和 `Testnet_Access_Policy.md` (文档)。
-`config-doc-drift-check.sh` (E-1) 持续验证两者一致性。
+以下默认值同时存在于 `RpcConfig` (代码)、`Docs/en/Ops/Testnet_Access_Policy.md` 与 `Docs/zh/Ops/Testnet_Access_Policy.md`。
+`config-doc-drift-check.sh` (E-1) 持续验证代码与双语文档三方一致性。
 
 | 端点类别 | 路径 | Anonymous | Authenticated | Whitelisted | 单位 |
 |----------|------|-----------|---------------|-------------|------|
@@ -106,12 +106,12 @@ Anonymous < Authenticated < Whitelisted
 | # | 位置 | 文件 |
 |---|------|------|
 | 1 | 代码默认值 | `crates/nexus-config/src/rpc.rs` → `RpcConfig::default()` |
-| 2 | 运维策略文档 | `Docs/zh/Ops/Testnet_Access_Policy.md` → §3 + §7 |
+| 2 | 运维策略文档 | `Docs/en/Ops/Testnet_Access_Policy.md` 与 `Docs/zh/Ops/Testnet_Access_Policy.md` → §3 + §7 |
 | 3 | 校准参考文档 | `Docs/zh/Ops/Capacity_Calibration_Reference.md` (本文件) |
 | 4 | 漂移检查脚本 | `scripts/config-doc-drift-check.sh` |
 | 5 | CI 门禁 | `.github/workflows/ci.yml` → Config-Doc Drift Check |
 
-`config-doc-drift-check.sh` 会自动检测 #1 和 #2 的偏差，在 CI 中作为阻断门禁。
+`config-doc-drift-check.sh` 会自动检测 #1 和 #2 的偏差，并要求中英文访问策略文档彼此一致，在 CI 中作为阻断门禁。
 
 ---
 

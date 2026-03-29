@@ -17,6 +17,7 @@ This summary covers the Block-STM parallel execution area inside `nexus-executio
 
 - Block-STM is separate from the Move adapter boundary.
 - Correctness questions usually localize to `mvhashmap.rs` or `mod.rs`.
+- Move VM errors (bytecode verification, type mismatch, etc.) are caught per-transaction in `executor.rs` and recorded as `MoveVmError` receipts rather than failing the entire batch.
 - Execution metrics are exposed elsewhere in the crate, not in the docs here.
 
 ## Minimal Read Paths
