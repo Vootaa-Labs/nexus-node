@@ -185,7 +185,7 @@ jobs:
   correctness-negative:
     name: Correctness Negative Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     needs: [test]
     steps:
       - uses: actions/checkout@v6.0.2
@@ -208,107 +208,29 @@ jobs:
       - name: Install cargo-nextest
         run: cargo install cargo-nextest --version 0.9.100 --locked
 
-      # Phase A: Execution correctness
-      - name: "Phase A: Forged vote rejected (SEC-H2)"
-        run: cargo nextest run --all-targets -E 'test(forged_vote_should_be_rejected)'
+      # Phase A: Execution correctness (SEC-H2, H5, C1, H4, H3, H11, H10, M10) — 8 tests batched
+      - name: "Phase A: Execution correctness"
+        run: cargo nextest run --all-targets -E 'test(forged_vote_should_be_rejected) | test(forged_transaction_should_be_rejected_at_gossip_ingress) | test(execution_failure_should_not_drop_committed_batch) | test(snapshot_import_should_reject_corrupted_manifest) | test(snapshot_path_should_reject_parent_traversal) | test(agent_replay_should_be_rejected_by_idempotency_key) | test(session_capacity_should_be_enforced) | test(mvhashmap_hot_key_conflicts_should_not_drop_validation_history)'
 
-      - name: "Phase A: Forged tx rejected at gossip (SEC-H5)"
-        run: cargo nextest run --all-targets -E 'test(forged_transaction_should_be_rejected_at_gossip_ingress)'
+      # Phase B: Execution-layer safety closure (SEC-H1..H6, M4, M7) — 8 tests batched
+      - name: "Phase B: Execution-layer safety closure"
+        run: cargo nextest run --all-targets -E 'test(execution_should_reject_forged_signed_transaction) | test(execution_should_reject_sender_pk_mismatch) | test(execution_should_reject_replayed_sequence_number) | test(execution_should_reject_expired_transaction) | test(execution_should_reject_wrong_chain_id) | test(remote_proposal_with_invalid_tx_should_be_rejected) | test(pending_proposals_should_be_bounded) | test(committed_buffer_backpressure)'
 
-      - name: "Phase A: Execution failure does not drop batch (SEC-C1)"
-        run: cargo nextest run --all-targets -E 'test(execution_failure_should_not_drop_committed_batch)'
+      # Phase C: Consensus safety (SEC-H7, H8, H9, H10) — 4 tests batched
+      - name: "Phase C: Consensus safety"
+        run: cargo nextest run --all-targets -E 'test(dag_should_reject_equivocating_certificate_same_origin_round) | test(certificate_verifier_should_reject_wrong_epoch) | test(insert_verified_certificate_should_reject_external_untrusted_input) | test(shoal_should_not_permanently_skip_late_anchor_without_recovery)'
 
-      - name: "Phase A: Snapshot rejects corrupted manifest (SEC-H4)"
-        run: cargo nextest run --all-targets -E 'test(snapshot_import_should_reject_corrupted_manifest)'
+      # Phase D: Sync & snapshot integrity (SEC-M6..M9, M11) — 5 tests batched
+      - name: "Phase D: Sync & snapshot integrity"
+        run: cargo nextest run --all-targets -E 'test(state_sync_should_not_amplify_single_request_across_cluster) | test(state_sync_should_reject_unverified_block_response) | test(snapshot_import_hash_failure_should_not_mutate_database) | test(snapshot_import_should_be_confined_to_snapshot_base_dir) | test(prune_should_be_atomic_across_column_families)'
 
-      - name: "Phase A: Snapshot rejects path traversal (SEC-H3)"
-        run: cargo nextest run --all-targets -E 'test(snapshot_path_should_reject_parent_traversal)'
+      # Phase E: Auth boundaries & capacity (SEC-M14, M15, M12, M13, M1) — 5 tests batched
+      - name: "Phase E: Auth boundaries & capacity"
+        run: cargo nextest run --all-targets -E 'test(network_rate_limiter_should_fail_closed_when_bucket_table_is_full) | test(faucet_limiter_should_fail_closed_when_address_table_is_full) | test(mcp_caller_identity_should_be_authenticated) | test(a2a_message_with_invalid_signature_should_be_rejected) | test(dead_letter_circuit_breaker_constant_is_bounded)'
 
-      - name: "Phase A: Agent replay rejected (SEC-H11)"
-        run: cargo nextest run --all-targets -E 'test(agent_replay_should_be_rejected_by_idempotency_key)'
-
-      - name: "Phase A: Session capacity enforced (SEC-H10)"
-        run: cargo nextest run --all-targets -E 'test(session_capacity_should_be_enforced)'
-
-      - name: "Phase A: MvHashMap hot-key conflicts preserve validation (SEC-M10)"
-        run: cargo nextest run --all-targets -E 'test(mvhashmap_hot_key_conflicts_should_not_drop_validation_history)'
-
-      # Phase B: Execution-layer safety closure
-      - name: "Phase B: Forged signature rejected (SEC-H1)"
-        run: cargo nextest run --all-targets -E 'test(execution_should_reject_forged_signed_transaction)'
-
-      - name: "Phase B: Sender-pk mismatch rejected (SEC-H1)"
-        run: cargo nextest run --all-targets -E 'test(execution_should_reject_sender_pk_mismatch)'
-
-      - name: "Phase B: Nonce replay rejected (SEC-H2)"
-        run: cargo nextest run --all-targets -E 'test(execution_should_reject_replayed_sequence_number)'
-
-      - name: "Phase B: Expired tx rejected (SEC-H3)"
-        run: cargo nextest run --all-targets -E 'test(execution_should_reject_expired_transaction)'
-
-      - name: "Phase B: Wrong chain_id rejected (SEC-H4)"
-        run: cargo nextest run --all-targets -E 'test(execution_should_reject_wrong_chain_id)'
-
-      - name: "Phase B: Remote proposal with bad tx rejected (SEC-H5/H6)"
-        run: cargo nextest run --all-targets -E 'test(remote_proposal_with_invalid_tx_should_be_rejected)'
-
-      - name: "Phase B: Pending proposals bounded (SEC-M4)"
-        run: cargo nextest run --all-targets -E 'test(pending_proposals_should_be_bounded)'
-
-      - name: "Phase B: Committed buffer backpressure (SEC-M7)"
-        run: cargo nextest run --all-targets -E 'test(committed_buffer_backpressure)'
-
-      # Phase C: Consensus safety
-      - name: "Phase C: DAG equivocation detected (SEC-H7)"
-        run: cargo nextest run --all-targets -E 'test(dag_should_reject_equivocating_certificate_same_origin_round)'
-
-      - name: "Phase C: Wrong epoch rejected (SEC-H8)"
-        run: cargo nextest run --all-targets -E 'test(certificate_verifier_should_reject_wrong_epoch)'
-
-      - name: "Phase C: Untrusted cert insert rejected (SEC-H9)"
-        run: cargo nextest run --all-targets -E 'test(insert_verified_certificate_should_reject_external_untrusted_input)'
-
-      - name: "Phase C: Late anchor recovery (SEC-H10)"
-        run: cargo nextest run --all-targets -E 'test(shoal_should_not_permanently_skip_late_anchor_without_recovery)'
-
-      # Phase D: Sync & snapshot integrity
-      - name: "Phase D: State sync no amplification (SEC-M6)"
-        run: cargo nextest run --all-targets -E 'test(state_sync_should_not_amplify_single_request_across_cluster)'
-
-      - name: "Phase D: Unverified block response rejected (SEC-M7)"
-        run: cargo nextest run --all-targets -E 'test(state_sync_should_reject_unverified_block_response)'
-
-      - name: "Phase D: Tampered snapshot leaves db clean (SEC-M8)"
-        run: cargo nextest run --all-targets -E 'test(snapshot_import_hash_failure_should_not_mutate_database)'
-
-      - name: "Phase D: Snapshot confined to base dir (SEC-M9)"
-        run: cargo nextest run --all-targets -E 'test(snapshot_import_should_be_confined_to_snapshot_base_dir)'
-
-      - name: "Phase D: Prune atomic across CFs (SEC-M11)"
-        run: cargo nextest run --all-targets -E 'test(prune_should_be_atomic_across_column_families)'
-
-      # Phase E: Auth boundaries & capacity
-      - name: "Phase E: Network rate limiter fail-closed (SEC-M14)"
-        run: cargo nextest run --all-targets -E 'test(network_rate_limiter_should_fail_closed_when_bucket_table_is_full)'
-
-      - name: "Phase E: Faucet limiter fail-closed (SEC-M15)"
-        run: cargo nextest run --all-targets -E 'test(faucet_limiter_should_fail_closed_when_address_table_is_full)'
-
-      - name: "Phase E: MCP caller authenticated (SEC-M12)"
-        run: cargo nextest run --all-targets -E 'test(mcp_caller_identity_should_be_authenticated)'
-
-      - name: "Phase E: A2A signature verified (SEC-M13)"
-        run: cargo nextest run --all-targets -E 'test(a2a_message_with_invalid_signature_should_be_rejected)'
-
-      - name: "Phase E: Dead-letter circuit breaker bounded (SEC-M1)"
-        run: cargo nextest run --all-targets -E 'test(dead_letter_circuit_breaker_constant_is_bounded)'
-
-      # Phase F: Determinism & consistency gate
-      - name: "Phase F: State root consistency across nodes (F-5)"
-        run: cargo nextest run --all-targets -E 'test(state_root_consistency_across_nodes)'
-
-      - name: "Phase F: Serial/parallel replay match across nodes (F-5)"
-        run: cargo nextest run --all-targets -E 'test(serial_and_parallel_replay_state_roots_match_across_nodes)'
+      # Phase F: Determinism & consistency gate (F-5) — 2 tests batched
+      - name: "Phase F: Determinism & consistency gate"
+        run: cargo nextest run --all-targets -E 'test(state_root_consistency_across_nodes) | test(serial_and_parallel_replay_state_roots_match_across_nodes)'
 
   # --------------------------------------------------------------------------
   # Gate 3c: Startup-Readiness Gate (F-1)
@@ -695,6 +617,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [test]
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v6.0.2
 
