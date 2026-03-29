@@ -216,11 +216,9 @@ fn move_error_to_record(
         },
         ExecutionError::OutOfGas { .. } => ExecutionStatus::OutOfGas,
         ExecutionError::BytecodeVerification { reason }
-        | ExecutionError::TypeMismatch { reason, .. } => {
-            ExecutionStatus::MoveVmError {
-                reason: reason.clone(),
-            }
-        }
+        | ExecutionError::TypeMismatch { reason, .. } => ExecutionStatus::MoveVmError {
+            reason: reason.clone(),
+        },
         ExecutionError::ContractNotFound { address } => ExecutionStatus::MoveVmError {
             reason: format!("contract not found: {address}"),
         },

@@ -53,6 +53,18 @@ REST_BASE_PORT=8080
 READINESS_TIMEOUT=60    # seconds to wait for a node to become ready
 RECOVERY_TIMEOUT=60     # seconds to wait after restart for recovery
 
+# Auto-detect compose file: docker compose needs COMPOSE_FILE when the
+# file isn't named docker-compose.yml (our convention is context-scoped
+# names like docker-compose-n7s.yml).
+if [ -z "${COMPOSE_FILE:-}" ]; then
+    for f in docker-compose-n7s.yml docker-compose-mvs-ci.yml docker-compose-smoke-ci.yml docker-compose.yml; do
+        if [ -f "$f" ]; then
+            export COMPOSE_FILE="$f"
+            break
+        fi
+    done
+fi
+
 PASS=0
 FAIL=0
 WARN=0
