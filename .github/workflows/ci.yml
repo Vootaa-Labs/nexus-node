@@ -861,8 +861,8 @@ jobs:
         run: |
           cargo build --release -p nexus-node -p nexus-keygen -p nexus-genesis -p nexus-wallet
 
-      - name: Build node image
-        run: docker build -t nexus-node .
+      - name: Build node image (reuse host binaries)
+        run: docker build --target runtime-prebuilt -t nexus-node .
 
       - name: Bootstrap local devnet
         run: |

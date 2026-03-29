@@ -1,5 +1,11 @@
 # Build output
 target/
+# Exception: allow pre-built release binaries for CI fast-path
+# (used by: docker build --target runtime-prebuilt)
+!target/release/nexus-node
+!target/release/nexus-keygen
+!target/release/nexus-genesis
+!target/release/nexus-wallet
 fuzz/target/
 # IDE / editor
 .idea/

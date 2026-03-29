@@ -5,7 +5,8 @@
 #
 # Multi-stage build:
 #   1. Builder: compile all Nexus binaries in a full Rust image.
-#   2. Runtime: minimal Debian image with only the binaries.
+#   2. Runtime-prebuilt: CI fast-path — copies host-built binaries directly.
+#   3. Runtime (default): minimal Debian image with builder-compiled binaries.
 #
 # Container directory contract:
 #   /nexus/config/   — read-only: node.toml, genesis.json
@@ -14,6 +15,10 @@
 #
 # Build:
 #   docker build -t nexus-node .
+#
+# CI fast-path (skip double compilation):
+#   cargo build --release -p nexus-node -p nexus-keygen -p nexus-genesis -p nexus-wallet
+#   docker build --target runtime-prebuilt -t nexus-node .
 #
 # Run:
 #   docker run -v ./devnet/validator-0/config:/nexus/config:ro \
@@ -87,7 +92,43 @@ RUN CARGO_BUILD_JOBS=4 cargo build --release \
     --bin nexus-genesis \
     --bin nexus-wallet
 
-# ── Stage 2: Runtime ─────────────────────────────────────────────────────
+# ── Stage 2: Runtime (pre-built, CI fast-path) ──────────────────────────
+# Usage: docker build --target runtime-prebuilt -t nexus-node .
+# Requires host-compiled Linux binaries in target/release/ (same arch).
+# Eliminates double compilation in CI by reusing cargo build output.
+FROM debian:bookworm-slim AS runtime-prebuilt
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid 1000 nexus && \
+    useradd --uid 1000 --gid nexus --shell /bin/false --create-home nexus
+
+RUN mkdir -p /nexus/config /nexus/keys /nexus/data && \
+    chown -R nexus:nexus /nexus
+
+COPY target/release/nexus-node    /usr/local/bin/nexus-node
+COPY target/release/nexus-keygen  /usr/local/bin/nexus-keygen
+COPY target/release/nexus-genesis /usr/local/bin/nexus-genesis
+COPY target/release/nexus-wallet  /usr/local/bin/nexus-wallet
+
+USER nexus:nexus
+WORKDIR /nexus
+
+VOLUME ["/nexus/config", "/nexus/keys", "/nexus/data"]
+EXPOSE 8080 9090 7000
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8080/ready || exit 1
+
+ENTRYPOINT ["nexus-node"]
+CMD ["/nexus/config/node.toml"]
+
+# ── Stage 3: Runtime (default) ───────────────────────────────────────────
+# This is the LAST stage, so plain `docker build .` uses it by default.
 FROM debian:bookworm-slim AS runtime
 
 # Install minimal runtime dependencies.
