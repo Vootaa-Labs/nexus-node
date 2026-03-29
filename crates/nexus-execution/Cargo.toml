@@ -21,9 +21,7 @@ bcs              = { workspace = true }
 blake3           = { workspace = true }
 rayon            = { workspace = true }
 dashmap          = { workspace = true }
-crossbeam        = { workspace = true }
 parking_lot      = { workspace = true }
-num_cpus         = { workspace = true }
 
 # Move VM (only compiled when feature "move-vm" is active)
 # All move-* types consumed via nexus-move-runtime::upstream (FORMAL-03 §8.2)
@@ -38,6 +36,9 @@ move-vm  = [
     "dep:nexus-move-types",
     "dep:bytes",
 ]
+
+[package.metadata.cargo-machete]
+ignored = ["nexus-move-types"]
 
 [dev-dependencies]
 nexus-test-utils = { workspace = true }

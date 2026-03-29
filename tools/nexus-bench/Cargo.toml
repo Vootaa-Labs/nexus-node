@@ -61,10 +61,8 @@ nexus-wallet     = { workspace = true }
 nexus-test-utils = { workspace = true }
 bcs              = { workspace = true }
 tokio            = { workspace = true }
-futures          = { workspace = true }
 serde            = { workspace = true }
 serde_json       = { workspace = true }
-hex              = { workspace = true }
 clap             = { workspace = true }
 anyhow           = { workspace = true }
 ureq             = { workspace = true }

@@ -25,10 +25,7 @@ tokio            = { workspace = true, features = ["test-util"] }
 serde            = { workspace = true }
 serde_json       = { workspace = true }
 tempfile         = { workspace = true }
-tracing          = { workspace = true }
 tracing-subscriber = { workspace = true }
-rand             = { workspace = true }
-futures          = { workspace = true }
 ureq             = { workspace = true }
 anyhow           = { workspace = true }
 

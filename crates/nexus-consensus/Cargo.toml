@@ -9,10 +9,8 @@ description  = "Narwhal DAG mempool and Shoal++ BFT consensus engine for Nexus."
 [dependencies]
 nexus-primitives = { workspace = true }
 nexus-crypto     = { workspace = true }
-nexus-network    = { workspace = true }
 nexus-storage    = { workspace = true }
 tokio            = { workspace = true }
-futures          = { workspace = true }
 thiserror        = { workspace = true }
 serde            = { workspace = true }
 tracing          = { workspace = true }

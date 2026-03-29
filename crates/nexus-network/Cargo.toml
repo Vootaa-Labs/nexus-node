@@ -17,12 +17,8 @@ serde            = { workspace = true }
 tracing          = { workspace = true }
 bcs              = { workspace = true }
 libp2p           = { workspace = true }
-bytes            = { workspace = true }
 dashmap          = { workspace = true }
 governor         = { workspace = true }
-parking_lot      = { workspace = true }
-hex              = { workspace = true }
-rand             = { workspace = true }
 metrics          = { workspace = true }
 
 [dev-dependencies]

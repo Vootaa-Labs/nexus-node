@@ -358,30 +358,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "axum-extra"
-version = "0.9.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c794b30c904f0a1c2fb7740f7df7f7972dfaa14ef6f57cb6178dc63e5dca2f04"
-dependencies = [
- "axum",
- "axum-core",
- "bytes",
- "fastrand",
- "futures-util",
- "headers",
- "http 1.4.0",
- "http-body 1.0.1",
- "http-body-util",
- "mime",
- "multer",
- "pin-project-lite",
- "serde",
- "tower",
- "tower-layer",
- "tower-service",
-]
-
-[[package]]
 name = "backtrace"
 version = "0.3.76"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1288,15 +1264,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
-name = "encoding_rs"
-version = "0.8.35"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
-dependencies = [
- "cfg-if",
-]
-
-[[package]]
 name = "enum-as-inner"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1713,30 +1680,6 @@ name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
-
-[[package]]
-name = "headers"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3314d5adb5d94bcdf56771f2e50dbbc80bb4bdf88967526706205ac9eff24eb"
-dependencies = [
- "base64",
- "bytes",
- "headers-core",
- "http 1.4.0",
- "httpdate",
- "mime",
- "sha1",
-]
-
-[[package]]
-name = "headers-core"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54b4a22553d4242c49fddb9ba998a99962b5cc6f22cb5a3482bec22522403ce4"
-dependencies = [
- "http 1.4.0",
-]
 
 [[package]]
 name = "heck"
@@ -3374,23 +3317,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "multer"
-version = "3.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83e87776546dc87511aa5ee218730c92b666d7264ab6ed41f9d215af9cd5224b"
-dependencies = [
- "bytes",
- "encoding_rs",
- "futures-util",
- "http 1.4.0",
- "httparse",
- "memchr",
- "mime",
- "spin 0.9.8",
- "version_check",
-]
-
-[[package]]
 name = "multiaddr"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3501,8 +3427,6 @@ dependencies = [
  "bcs",
  "clap",
  "criterion",
- "futures",
- "hex",
  "nexus-config",
  "nexus-consensus",
  "nexus-crypto",
@@ -3544,9 +3468,7 @@ name = "nexus-consensus"
 version = "0.1.14"
 dependencies = [
  "bcs",
- "futures",
  "nexus-crypto",
- "nexus-network",
  "nexus-primitives",
  "nexus-storage",
  "nexus-test-utils",
@@ -3571,7 +3493,6 @@ dependencies = [
  "nexus-test-utils",
  "pqcrypto-falcon",
  "pqcrypto-traits",
- "rand 0.8.5",
  "rayon",
  "serde",
  "thiserror 1.0.69",
@@ -3585,7 +3506,6 @@ dependencies = [
  "bcs",
  "blake3",
  "bytes",
- "crossbeam",
  "dashmap",
  "metrics",
  "nexus-config",
@@ -3596,7 +3516,6 @@ dependencies = [
  "nexus-primitives",
  "nexus-storage",
  "nexus-test-utils",
- "num_cpus",
  "parking_lot",
  "proptest",
  "rayon",
@@ -3653,11 +3572,9 @@ dependencies = [
  "hex",
  "libp2p-identity",
  "nexus-crypto",
- "nexus-primitives",
  "serde",
  "serde_json",
  "tempfile",
- "zeroize",
 ]
 
 [[package]]
@@ -3740,18 +3657,14 @@ version = "0.1.14"
 dependencies = [
  "async-trait",
  "bcs",
- "bytes",
  "dashmap",
  "futures",
  "governor",
- "hex",
  "libp2p",
  "metrics",
  "nexus-crypto",
  "nexus-primitives",
  "nexus-test-utils",
- "parking_lot",
- "rand 0.8.5",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -3801,7 +3714,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
- "zeroize",
 ]
 
 [[package]]
@@ -3809,7 +3721,6 @@ name = "nexus-rpc"
 version = "0.1.14"
 dependencies = [
  "axum",
- "axum-extra",
  "bcs",
  "blake3",
  "hex",
@@ -3834,7 +3745,6 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -3863,7 +3773,6 @@ dependencies = [
  "axum",
  "bcs",
  "blake3",
- "futures",
  "hex",
  "http 1.4.0",
  "libp2p-identity",
@@ -3877,13 +3786,11 @@ dependencies = [
  "nexus-primitives",
  "nexus-rpc",
  "nexus-storage",
- "rand 0.8.5",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
  "tower",
- "tracing",
  "tracing-subscriber",
  "ureq",
 ]
@@ -3897,7 +3804,6 @@ dependencies = [
  "blake3",
  "clap",
  "hex",
- "nexus-config",
  "nexus-crypto",
  "nexus-execution",
  "nexus-intent",
@@ -3906,7 +3812,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror 1.0.69",
  "toml",
  "tracing",
  "tracing-subscriber",
@@ -4060,16 +3965,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "num_cpus"
-version = "1.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
-dependencies = [
- "hermit-abi",
- "libc",
 ]
 
 [[package]]
@@ -4845,7 +4740,7 @@ dependencies = [
  "cc",
  "libc",
  "once_cell",
- "spin 0.5.2",
+ "spin",
  "untrusted 0.7.1",
  "web-sys",
  "winapi",
@@ -5331,12 +5226,6 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
-
-[[package]]
-name = "spin"
-version = "0.9.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
 name = "spinning_top"

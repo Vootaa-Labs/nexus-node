@@ -280,8 +280,8 @@ verify-test-fixtures:
 	for entry in $(FIXTURE_MVS); do \
 		mv_path=$${entry%%:*}; \
 		addr_suffix=$${entry##*:}; \
-		padded=$$(printf '%060d' 0)$${addr_suffix}; \
-		pattern=$${padded: -64}; \
+		full=0000000000000000000000000000000000000000000000000000000000000000$${addr_suffix}; \
+		pattern=$$(echo "$$full" | grep -oE '.{64}$$'); \
 		if [ ! -f "$$mv_path" ]; then \
 			echo "  MISS  $$mv_path (file not found)"; \
 			fail=1; \

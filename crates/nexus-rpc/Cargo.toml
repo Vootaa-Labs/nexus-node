@@ -22,12 +22,10 @@ serde_json       = { workspace = true }
 tracing          = { workspace = true }
 hex              = { workspace = true }
 axum             = { workspace = true }
-axum-extra       = { workspace = true }
 tower            = { workspace = true }
 tower-http       = { workspace = true }
 nexus-storage    = { workspace = true }
 http             = { workspace = true }
-uuid             = { workspace = true }
 parking_lot      = { workspace = true }
 metrics          = { workspace = true }
 metrics-exporter-prometheus = { workspace = true }

@@ -9,7 +9,6 @@ description  = "Safe high-level cryptographic API: key generation, signing, veri
 [dependencies]
 nexus-primitives   = { workspace = true }
 zeroize            = { workspace = true }
-rand               = { workspace = true }
 thiserror          = { workspace = true }
 serde              = { workspace = true }
 blake3             = { workspace = true }

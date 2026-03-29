@@ -15,7 +15,6 @@ nexus-primitives = { workspace = true }
 nexus-crypto     = { workspace = true }
 nexus-execution  = { workspace = true }
 nexus-intent     = { workspace = true }
-nexus-config     = { workspace = true }
 clap             = { workspace = true }
 serde            = { workspace = true }
 serde_json       = { workspace = true }
@@ -23,7 +22,6 @@ toml             = { workspace = true }
 blake3           = { workspace = true }
 bcs              = { workspace = true }
 hex              = { workspace = true }
-thiserror        = { workspace = true }
 anyhow           = { workspace = true }
 tracing          = { workspace = true }
 tracing-subscriber = { workspace = true }

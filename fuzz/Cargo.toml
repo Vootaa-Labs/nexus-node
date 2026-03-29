@@ -11,13 +11,11 @@ cargo-fuzz = true
 libfuzzer-sys  = "0.4"
 bcs            = "0.1.6"
 blake3         = "1"
-tempfile       = "~3.14"
 
 # Crates under test — use relative paths to the workspace root.
 nexus-consensus  = { path = "../crates/nexus-consensus" }
 nexus-execution  = { path = "../crates/nexus-execution", default-features = false }
 nexus-storage    = { path = "../crates/nexus-storage" }
-nexus-primitives = { path = "../crates/nexus-primitives" }
 nexus-network    = { path = "../crates/nexus-network" }
 nexus-node       = { path = "../crates/nexus-node" }
 

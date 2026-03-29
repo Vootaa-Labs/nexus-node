@@ -10,7 +10,6 @@ description  = "Core primitive types for the Nexus blockchain (IDs, digests, tim
 serde      = { workspace = true }
 thiserror  = { workspace = true }
 hex        = { workspace = true }
-zeroize    = { workspace = true }
 blake3     = { workspace = true }
 
 [dev-dependencies]
