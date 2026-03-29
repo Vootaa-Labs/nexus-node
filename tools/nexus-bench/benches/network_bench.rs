@@ -17,7 +17,7 @@ use nexus_network::types::MessageType;
 fn bench_wire_encode_decode(c: &mut Criterion) {
     let mut group = c.benchmark_group("wire_codec");
 
-    for &size in &[256, 1024, 4096, 65_536, 131_072] {
+    for &size in &[256, 1024, 4096, 65_500] {
         // Use raw Vec<u8> as payload (BCS serializes it with length prefix)
         let payload: Vec<u8> = vec![0xABu8; size];
         let msg_type = MessageType::Transaction;

@@ -96,12 +96,16 @@ RUN CARGO_BUILD_JOBS=4 cargo build --release \
 # Usage: docker build --target runtime-prebuilt -t nexus-node .
 # Requires host-compiled Linux binaries in target/release/ (same arch).
 # Eliminates double compilation in CI by reusing cargo build output.
-FROM debian:bookworm-slim AS runtime-prebuilt
+#
+# NOTE: ubuntu:24.04 (GLIBC 2.39) is required because the CI runner is
+# ubuntu-latest (24.04) and the host-compiled binaries require GLIBC 2.38+.
+# debian:bookworm-slim (GLIBC 2.36) is too old for these binaries.
+FROM ubuntu:24.04 AS runtime-prebuilt
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
-    libssl3 \
+    libssl3t64 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 1000 nexus && \

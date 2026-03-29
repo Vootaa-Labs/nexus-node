@@ -62,5 +62,7 @@ deny = [
 # ---------------------------------------------------------------------------
 [sources]
 unknown-registry = "deny"
-unknown-git      = "warn"
+unknown-git      = "deny"
 allow-registry   = ["https://github.com/rust-lang/crates.io-index"]
+# nexus-move is our own fork of the Move VM, consumed via git tag.
+allow-git        = ["https://github.com/vootaa-labs/nexus-move"]

@@ -613,6 +613,9 @@ jobs:
       - uses: actions/checkout@v6.0.2
 
 
+      - name: Install zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
       - name: "Check config-doc drift"
         run: zsh scripts/config-doc-drift-check.sh
 
@@ -676,7 +679,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libclang-dev jq
+          sudo apt-get install -y libclang-dev jq zsh
 
       - name: Install audit tools
         run: cargo install cargo-audit --locked
@@ -720,7 +723,7 @@ jobs:
             --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           files: lcov.info
           fail_ci_if_error: false
@@ -884,7 +887,7 @@ jobs:
 
       - name: Upload container logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: move-vm-smoke-logs
           path: docker-compose.log

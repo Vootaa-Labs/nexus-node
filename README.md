@@ -1,6 +1,6 @@
 # nexus-node
 
-> **Version 0.1.13** — Settlement and evidence anchor node for the Nexus network.
+> **Version 0.1.14** — Settlement and evidence anchor node for the Nexus network.
 
 nexus-node is a Rust workspace containing the validator node, networking, consensus, execution, intent handling, RPC services, and developer tooling.
 
@@ -27,8 +27,7 @@ nexus-node/
 ├── contracts/        Smart contract examples & staking
 ├── tests/            Integration test utilities
 ├── fuzz/             Fuzz testing harnesses
-├── scripts/          Devnet & operational scripts
-└── devnet-n7s/       7-validator devnet configuration
+└── scripts/          Devnet & operational scripts
 ```
 
 ## External Dependencies
