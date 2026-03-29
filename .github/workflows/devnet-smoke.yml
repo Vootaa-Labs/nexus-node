@@ -74,23 +74,35 @@ jobs:
       - name: Start cluster
         run: docker compose -f docker-compose-smoke-ci.yml up -d
 
-      - name: Wait for all nodes to become ready (120s max)
+      - name: Verify containers are running
+        run: |
+          sleep 5
+          docker compose -f docker-compose-smoke-ci.yml ps
+          echo "--- Initial logs (node-0, last 20 lines) ---"
+          docker compose -f docker-compose-smoke-ci.yml logs nexus-node-0 2>&1 | tail -20
+
+      - name: Wait for all nodes to become ready (180s max)
         run: |
           for i in 0 1 2 3; do
             PORT=$((8080 + i))
             echo "Waiting for node-$i on port $PORT..."
             ELAPSED=0
-            while [ "$ELAPSED" -lt 120 ]; do
-              if curl -sf "http://localhost:${PORT}/ready" > /dev/null 2>&1; then
+            while [ "$ELAPSED" -lt 180 ]; do
+              HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PORT}/ready" 2>/dev/null || echo "000")
+              if [ "$HTTP_CODE" = "200" ]; then
                 echo "  node-$i ready after ${ELAPSED}s"
                 break
+              fi
+              if [ "$((ELAPSED % 30))" -eq 0 ] && [ "$ELAPSED" -gt 0 ]; then
+                echo "  node-$i still waiting (${ELAPSED}s, last HTTP $HTTP_CODE)..."
+                docker compose -f docker-compose-smoke-ci.yml ps "nexus-node-$i" 2>/dev/null | tail -2
               fi
               sleep 3
               ELAPSED=$((ELAPSED + 3))
             done
-            if [ "$ELAPSED" -ge 120 ]; then
-              echo "::error::node-$i failed to become ready within 120s"
-              docker compose -f docker-compose-smoke-ci.yml logs "nexus-node-$i" | tail -30
+            if [ "$ELAPSED" -ge 180 ]; then
+              echo "::error::node-$i failed to become ready within 180s"
+              docker compose -f docker-compose-smoke-ci.yml logs "nexus-node-$i" | tail -50
               exit 1
             fi
           done

@@ -93,6 +93,7 @@ cat >> "$OUTPUT" <<EOF
       - NEXUS_STORAGE_PATH=/nexus/data/db
       - NEXUS_NETWORK_PORT=${P2P_BASE}
       - NEXUS_GRPC_PORT=${GRPC_BASE}
+      - NEXUS_REST_PORT=${REST_BASE}
       - NEXUS_NUM_SHARDS=${NUM_SHARDS}
     ports:
       - "${REST_BASE}:${REST_BASE}"
@@ -137,6 +138,7 @@ for i in $(seq 1 $((NUM_VALIDATORS - 1))); do
       - NEXUS_STORAGE_PATH=/nexus/data/db
       - NEXUS_NETWORK_PORT=${P2P_PORT}
       - NEXUS_GRPC_PORT=${GRPC_PORT}
+      - NEXUS_REST_PORT=${REST_PORT}
       - NEXUS_NUM_SHARDS=${NUM_SHARDS}
     ports:
       - "${REST_PORT}:${REST_PORT}"

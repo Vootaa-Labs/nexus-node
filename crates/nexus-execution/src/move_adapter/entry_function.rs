@@ -18,6 +18,7 @@ use super::abi::{FunctionAbi, MoveType};
 ///
 /// This is the Nexus-public DTO — no Move-internal types leak.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // forward-declared; wired in the call-dispatch milestone
 pub(crate) struct MoveCallRequest {
     /// Transaction sender.
     pub sender: AccountAddress,

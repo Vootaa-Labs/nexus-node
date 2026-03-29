@@ -147,6 +147,13 @@ impl NodeConfig {
             })?;
             cfg.rpc.grpc_listen_addr.set_port(port);
         }
+        if let Ok(val) = std::env::var("NEXUS_REST_PORT") {
+            let port: u16 = val.parse().map_err(|_| ConfigError::EnvOverride {
+                key: "NEXUS_REST_PORT".to_owned(),
+                reason: format!("not a valid u16: {val}"),
+            })?;
+            cfg.rpc.rest_listen_addr.set_port(port);
+        }
         if let Ok(val) = std::env::var("NEXUS_GENESIS_PATH") {
             cfg.genesis_path = Some(PathBuf::from(val));
         }
