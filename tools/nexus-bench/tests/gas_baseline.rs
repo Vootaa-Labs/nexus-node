@@ -121,12 +121,18 @@ fn gas_baseline_publish() {
     };
 
     // With the real Move VM, fake bytecode fails verification.
-    // The test verifies that the executor surfaces the error cleanly.
+    // The executor surfaces the error as a per-tx receipt with MoveVmError
+    // status rather than propagating a fatal batch error.
     let result = executor.execute(&[tx], &state);
+    let block = result.expect("bytecode verification should produce a receipt, not a fatal error");
+    assert_eq!(block.receipts.len(), 1);
     assert!(
-        result.is_err(),
-        "fake bytecode should fail verification, got: {:?}",
-        result,
+        matches!(
+            block.receipts[0].status,
+            nexus_execution::types::ExecutionStatus::MoveVmError { .. }
+        ),
+        "fake bytecode should produce MoveVmError receipt, got: {:?}",
+        block.receipts[0].status,
     );
 
     // Gas accounting for valid publishes is tested via the real counter
