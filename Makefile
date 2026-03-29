@@ -166,7 +166,7 @@ devnet-build:
 devnet-setup:
 	@echo "=== Bootstrapping devnet layout ($(NEXUS_NUM_VALIDATORS) validators, $(NEXUS_NUM_SHARDS) shards) ==="
 	./scripts/setup-devnet.sh -n $(NEXUS_NUM_VALIDATORS) -s $(NEXUS_NUM_SHARDS) -o devnet-n7s -f
-	./scripts/generate-compose.sh \
+	NEXUS_NUM_SHARDS=$(NEXUS_NUM_SHARDS) ./scripts/generate-compose.sh \
 		-o docker-compose-n7s.yml \
 		-d devnet-n7s \
 		-n $(NEXUS_NUM_VALIDATORS)
@@ -230,7 +230,7 @@ devnet-json:
 ci-local-smoke: devnet-build
 	@echo "==> ci-local-smoke: generating devnet (devnet-mvs-ci/)..."
 	@./scripts/setup-devnet.sh -o devnet-mvs-ci -n $(NEXUS_NUM_VALIDATORS) -s $(NEXUS_NUM_SHARDS) -f
-	@./scripts/generate-compose.sh -o docker-compose-mvs-ci.yml -d devnet-mvs-ci -n $(NEXUS_NUM_VALIDATORS)
+	@NEXUS_NUM_SHARDS=$(NEXUS_NUM_SHARDS) ./scripts/generate-compose.sh -o docker-compose-mvs-ci.yml -d devnet-mvs-ci -n $(NEXUS_NUM_VALIDATORS)
 	@echo "==> ci-local-smoke: starting containers..."
 	@docker compose -f docker-compose-mvs-ci.yml up -d
 	@echo "==> ci-local-smoke: waiting for readiness..."

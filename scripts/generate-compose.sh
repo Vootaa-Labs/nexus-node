@@ -20,7 +20,7 @@
 set -euo pipefail
 
 NUM_VALIDATORS="${NEXUS_NUM_VALIDATORS:-7}"
-NUM_SHARDS="${NEXUS_NUM_SHARDS:-2}"
+NUM_SHARDS="${NEXUS_NUM_SHARDS:-1}"
 OUTPUT="./docker-compose.yml"
 DEVNET_DIR="./devnet-n7s"
 
@@ -36,6 +36,13 @@ while getopts "n:o:d:h" opt; do
         *) exit 1 ;;
     esac
 done
+
+# Normalise DEVNET_DIR: Docker Compose treats paths without ./ or / prefix
+# as named-volume references, not bind mounts.
+case "$DEVNET_DIR" in
+    ./*|/*|~*) ;;                          # already absolute or explicitly relative
+    *)         DEVNET_DIR="./$DEVNET_DIR" ;;  # prepend ./
+esac
 
 if [ "$NUM_VALIDATORS" -lt 4 ]; then
     echo "Error: BFT requires at least 4 validators (got $NUM_VALIDATORS)" >&2

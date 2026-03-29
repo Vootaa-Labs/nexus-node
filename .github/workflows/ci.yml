@@ -867,7 +867,7 @@ jobs:
       - name: Bootstrap local devnet
         run: |
           ./scripts/setup-devnet.sh -o devnet-mvs-ci -f
-          ./scripts/generate-compose.sh -o docker-compose-mvs-ci.yml -d devnet-mvs-ci -n 7
+          ./scripts/generate-compose.sh -o docker-compose-mvs-ci.yml -d ./devnet-mvs-ci -n 7
 
       - name: Start local devnet
         run: docker compose -f docker-compose-mvs-ci.yml up -d
