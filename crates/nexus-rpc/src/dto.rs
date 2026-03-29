@@ -134,6 +134,11 @@ pub enum ExecutionStatusDto {
     HtlcPreimageMismatch,
     /// HTLC refund too early.
     HtlcRefundTooEarly,
+    /// Move VM error (bytecode verification, contract not found, etc.).
+    MoveVmError {
+        /// Human-readable error description.
+        reason: String,
+    },
 }
 
 impl From<nexus_execution::types::ExecutionStatus> for ExecutionStatusDto {
@@ -160,6 +165,9 @@ impl From<nexus_execution::types::ExecutionStatus> for ExecutionStatusDto {
                 Self::HtlcPreimageMismatch
             }
             nexus_execution::types::ExecutionStatus::HtlcRefundTooEarly => Self::HtlcRefundTooEarly,
+            nexus_execution::types::ExecutionStatus::MoveVmError { reason } => {
+                Self::MoveVmError { reason }
+            }
         }
     }
 }

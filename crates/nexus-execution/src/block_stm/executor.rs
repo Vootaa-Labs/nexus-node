@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 use parking_lot::Mutex;
 
-use crate::error::ExecutionResult;
+use crate::error::{ExecutionError, ExecutionResult};
 use crate::move_adapter::{contract_to_account, MoveExecutor, NexusStateView};
 use crate::traits::StateView;
 use crate::types::{
@@ -199,6 +199,46 @@ fn rejection_record(status: ExecutionStatus) -> TxExecutionRecord {
     }
 }
 
+/// Convert a Move execution [`ExecutionError`] into a per-tx error record
+/// so that it does **not** propagate as a fatal batch error.
+///
+/// Block-fatal errors (storage, Block-STM, codec) are re-raised; Move VM
+/// errors (abort, OOG, bytecode verification, contract-not-found, type
+/// mismatch, account-not-found) produce a receipt with an error status.
+fn move_error_to_record(
+    err: ExecutionError,
+    read_set: HashMap<StateKey, Option<Vec<u8>>>,
+) -> ExecutionResult<TxExecutionRecord> {
+    let status = match &err {
+        ExecutionError::MoveAbort { location, code } => ExecutionStatus::MoveAbort {
+            location: location.clone(),
+            code: *code,
+        },
+        ExecutionError::OutOfGas { .. } => ExecutionStatus::OutOfGas,
+        ExecutionError::BytecodeVerification { reason }
+        | ExecutionError::TypeMismatch { reason, .. } => {
+            ExecutionStatus::MoveVmError {
+                reason: reason.clone(),
+            }
+        }
+        ExecutionError::ContractNotFound { address } => ExecutionStatus::MoveVmError {
+            reason: format!("contract not found: {address}"),
+        },
+        ExecutionError::AccountNotFound { address } => ExecutionStatus::MoveVmError {
+            reason: format!("account not found: {address}"),
+        },
+        // Block-fatal — propagate to caller.
+        _ => return Err(err),
+    };
+    Ok(TxExecutionRecord {
+        read_set,
+        write_set: HashMap::new(),
+        gas_used: 0,
+        status,
+        state_changes: Vec::new(),
+    })
+}
+
 // ── Transaction executor (single tx) ────────────────────────────────────
 
 /// Execute a single transaction against the overlay, recording read/write sets.
@@ -352,10 +392,14 @@ pub(crate) fn execute_single_tx(
                     tx.body.gas_limit,
                 )
             };
-            let output = output?;
 
             // Merge tracked overlay reads into the read-set.
             read_set.extend(view.into_reads());
+
+            let output = match output {
+                Ok(o) => o,
+                Err(e) => return move_error_to_record(e, read_set),
+            };
 
             // Convert VM write-set to StateKey-based write-set.
             for ((acct, key), value) in &output.write_set {
@@ -391,10 +435,14 @@ pub(crate) fn execute_single_tx(
                     tx.body.gas_limit,
                 )
             };
-            let output = output?;
 
             // Merge tracked overlay reads into the read-set.
             read_set.extend(view.into_reads());
+
+            let output = match output {
+                Ok(o) => o,
+                Err(e) => return move_error_to_record(e, read_set),
+            };
 
             // Convert VM write-set to StateKey-based write-set.
             for ((acct, key), value) in &output.write_set {
@@ -432,8 +480,11 @@ pub(crate) fn execute_single_tx(
                     tx.body.gas_limit,
                 )
             };
-            let output = output?;
             read_set.extend(view.into_reads());
+            let output = match output {
+                Ok(o) => o,
+                Err(e) => return move_error_to_record(e, read_set),
+            };
             for ((acct, key), value) in &output.write_set {
                 write_set.insert(
                     StateKey {
@@ -471,8 +522,11 @@ pub(crate) fn execute_single_tx(
                     tx.body.gas_limit,
                 )
             };
-            let output = output?;
             read_set.extend(view.into_reads());
+            let output = match output {
+                Ok(o) => o,
+                Err(e) => return move_error_to_record(e, read_set),
+            };
             for ((acct, key), value) in &output.write_set {
                 write_set.insert(
                     StateKey {

@@ -204,6 +204,14 @@ pub enum ExecutionStatus {
     HtlcPreimageMismatch,
     /// HTLC refund attempted before timeout epoch.
     HtlcRefundTooEarly,
+
+    // ── Move VM failure (non-abort) ─────────────────────────────────
+    /// Move VM error that is not a program abort (e.g. bytecode
+    /// verification failure, contract not found, type mismatch).
+    MoveVmError {
+        /// Human-readable error description.
+        reason: String,
+    },
 }
 
 /// A single key/value state mutation produced by a transaction.

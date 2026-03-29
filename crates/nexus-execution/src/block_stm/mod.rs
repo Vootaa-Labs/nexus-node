@@ -280,14 +280,20 @@ impl BlockStmExecutor {
         let mut conflict_count: u32 = 0;
 
         for i in 0..n {
-            // Skip transactions that failed pre-validation — they have
-            // empty write-sets and should not participate in OCC.
+            // Skip transactions that failed pre-validation or have a
+            // deterministic Move VM error — they have empty write-sets
+            // and should not participate in OCC.
+            //
+            // NOTE: SequenceNumberMismatch, MoveAbort, and OutOfGas are
+            // NOT skipped because they may resolve differently after
+            // OCC re-execution against updated state.
             if matches!(
                 records[i].status,
                 crate::types::ExecutionStatus::InvalidSignature
                     | crate::types::ExecutionStatus::SenderMismatch
                     | crate::types::ExecutionStatus::Expired
                     | crate::types::ExecutionStatus::ChainIdMismatch
+                    | crate::types::ExecutionStatus::MoveVmError { .. }
             ) {
                 continue;
             }
