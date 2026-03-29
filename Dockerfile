@@ -108,8 +108,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3t64 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd --gid 1000 nexus && \
-    useradd --uid 1000 --gid nexus --shell /bin/false --create-home nexus
+RUN groupadd --gid 1001 nexus && \
+    useradd --uid 1001 --gid nexus --shell /bin/false --create-home nexus
 
 RUN mkdir -p /nexus/config /nexus/keys /nexus/data && \
     chown -R nexus:nexus /nexus
