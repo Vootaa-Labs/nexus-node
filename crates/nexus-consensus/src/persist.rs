@@ -330,4 +330,88 @@ mod tests {
         assert_eq!(restored.len(), 1);
         assert_eq!(restored[0].cert_digest, c0.cert_digest);
     }
+
+    #[tokio::test]
+    async fn delete_empty_slice_is_noop() {
+        // Both sync and async delete with empty slice should return Ok without error.
+        let store = MemoryStore::new();
+        let persistence = DagPersistence::new(store);
+        // async path
+        persistence.delete_certificates(&[]).await.unwrap();
+        // sync path
+        persistence.delete_certificates_sync(&[]).unwrap();
+    }
+
+    /// Build a cert for any epoch (not just epoch=1 like make_test_cert).
+    fn make_cert_for_epoch(epoch_n: u64, origin: u32, round: u64, seed: u8) -> NarwhalCertificate {
+        let epoch = EpochNumber(epoch_n);
+        let batch_digest = Blake3Digest([seed; 32]);
+        let origin_idx = ValidatorIndex(origin);
+        let round_num = RoundNumber(round);
+        let parents = vec![];
+        let cert_digest =
+            compute_cert_digest(epoch, &batch_digest, origin_idx, round_num, &parents).unwrap();
+        NarwhalCertificate {
+            epoch,
+            batch_digest,
+            origin: origin_idx,
+            round: round_num,
+            parents,
+            signatures: vec![],
+            signers: ValidatorBitset::new(4),
+            cert_digest,
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn purge_by_epoch_removes_matching_certs() {
+        let store = MemoryStore::new();
+        let persistence = DagPersistence::new(store);
+
+        // epoch 1
+        let c0 = make_cert_for_epoch(1, 0, 1, 10);
+        let c1 = make_cert_for_epoch(1, 1, 1, 11);
+        // epoch 2 — should survive the purge
+        let c2 = make_cert_for_epoch(2, 0, 1, 20);
+
+        persistence.persist_certificate(&c0).await.unwrap();
+        persistence.persist_certificate(&c1).await.unwrap();
+        persistence.persist_certificate(&c2).await.unwrap();
+
+        let removed = persistence
+            .purge_by_epoch(nexus_primitives::EpochNumber(1))
+            .unwrap();
+        assert_eq!(removed, 2);
+
+        let remaining = persistence.restore_certificates().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].cert_digest, c2.cert_digest);
+    }
+
+    #[tokio::test]
+    async fn purge_by_epoch_no_match_returns_zero() {
+        let store = MemoryStore::new();
+        let persistence = DagPersistence::new(store);
+
+        let c0 = make_cert_for_epoch(1, 0, 0, 10);
+        persistence.persist_certificate(&c0).await.unwrap();
+
+        // Purge epoch 99 which has no certs.
+        let removed = persistence
+            .purge_by_epoch(nexus_primitives::EpochNumber(99))
+            .unwrap();
+        assert_eq!(removed, 0);
+
+        // Original cert still there.
+        let remaining = persistence.restore_certificates().unwrap();
+        assert_eq!(remaining.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn store_accessor_returns_inner_store() {
+        let store = MemoryStore::new();
+        let persistence = DagPersistence::new(store);
+        // Just call it to drive coverage; MemoryStore doesn't expose an equality check.
+        let _s = persistence.store();
+    }
 }

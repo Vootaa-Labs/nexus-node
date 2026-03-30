@@ -257,6 +257,10 @@ mod tests {
     use super::*;
     use nexus_primitives::Blake3Digest;
 
+    fn sample_digest(byte: u8) -> Blake3Digest {
+        Blake3Digest([byte; 32])
+    }
+
     #[test]
     fn error_display_includes_context() {
         let err = ExecutionError::SequenceNumberMismatch {
@@ -336,5 +340,158 @@ mod tests {
     fn error_is_send_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<ExecutionError>();
+    }
+
+    #[test]
+    fn metric_label_covers_every_variant() {
+        let crypto_err = nexus_crypto::NexusCryptoError::VerificationFailed {
+            reason: "test verification failure".into(),
+        };
+        let sender = AccountAddress([0x11; 32]);
+        let contract = nexus_primitives::ContractAddress([0x22; 32]);
+        let shard = ShardId(7);
+
+        let cases = vec![
+            (
+                ExecutionError::InvalidSignature {
+                    tx_digest: sample_digest(0x01),
+                    source: crypto_err,
+                },
+                "InvalidSignature",
+            ),
+            (
+                ExecutionError::SequenceNumberMismatch {
+                    sender,
+                    expected: 5,
+                    got: 3,
+                },
+                "SequenceNumberMismatch",
+            ),
+            (
+                ExecutionError::TransactionExpired {
+                    expiry: nexus_primitives::EpochNumber(4),
+                    current: nexus_primitives::EpochNumber(5),
+                },
+                "TransactionExpired",
+            ),
+            (
+                ExecutionError::PayloadTooLarge { size: 12, max: 10 },
+                "PayloadTooLarge",
+            ),
+            (
+                ExecutionError::GasLimitTooLow {
+                    limit: 9,
+                    minimum: 10,
+                },
+                "GasLimitTooLow",
+            ),
+            (
+                ExecutionError::ChainIdMismatch {
+                    expected: 1,
+                    got: 2,
+                },
+                "ChainIdMismatch",
+            ),
+            (
+                ExecutionError::MoveAbort {
+                    location: "0x1::counter::bump".into(),
+                    code: 7,
+                },
+                "MoveAbort",
+            ),
+            (
+                ExecutionError::OutOfGas {
+                    used: 11,
+                    limit: 10,
+                },
+                "OutOfGas",
+            ),
+            (
+                ExecutionError::ContractNotFound { address: contract },
+                "ContractNotFound",
+            ),
+            (
+                ExecutionError::BytecodeVerification {
+                    reason: "bad module".into(),
+                },
+                "BytecodeVerification",
+            ),
+            (
+                ExecutionError::TypeMismatch {
+                    function: "counter::get_count".into(),
+                    reason: "wrong args".into(),
+                },
+                "TypeMismatch",
+            ),
+            (
+                ExecutionError::AccountNotFound { address: sender },
+                "AccountNotFound",
+            ),
+            (
+                ExecutionError::InsufficientBalance {
+                    address: sender,
+                    required: 10,
+                    available: 3,
+                },
+                "InsufficientBalance",
+            ),
+            (ExecutionError::Storage("disk full".into()), "Storage"),
+            (
+                ExecutionError::MaxRetriesExceeded {
+                    tx_index: 1,
+                    retries: 3,
+                },
+                "MaxRetriesExceeded",
+            ),
+            (
+                ExecutionError::ReadSetValidationFailed { tx_index: 2 },
+                "ReadSetValidationFailed",
+            ),
+            (
+                ExecutionError::CrossShardTimeout { shard },
+                "CrossShardTimeout",
+            ),
+            (
+                ExecutionError::ShardUnavailable { shard },
+                "ShardUnavailable",
+            ),
+            (
+                ExecutionError::HtlcLockNotFound {
+                    lock_digest: sample_digest(0x02),
+                },
+                "HtlcLockNotFound",
+            ),
+            (
+                ExecutionError::HtlcAlreadyClaimed {
+                    lock_digest: sample_digest(0x03),
+                },
+                "HtlcAlreadyClaimed",
+            ),
+            (
+                ExecutionError::HtlcAlreadyRefunded {
+                    lock_digest: sample_digest(0x04),
+                },
+                "HtlcAlreadyRefunded",
+            ),
+            (
+                ExecutionError::HtlcPreimageMismatch {
+                    lock_digest: sample_digest(0x05),
+                },
+                "HtlcPreimageMismatch",
+            ),
+            (
+                ExecutionError::HtlcRefundTooEarly {
+                    lock_digest: sample_digest(0x06),
+                    timeout: nexus_primitives::EpochNumber(10),
+                    current: nexus_primitives::EpochNumber(9),
+                },
+                "HtlcRefundTooEarly",
+            ),
+            (ExecutionError::Codec("bad bcs".into()), "Codec"),
+        ];
+
+        for (err, expected) in cases {
+            assert_eq!(err.metric_label(), expected);
+        }
     }
 }

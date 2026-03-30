@@ -483,4 +483,80 @@ mod tests {
         assert_eq!(Topic::sharded_tx(3), Topic::ShardedTransaction(3));
         assert_eq!(Topic::sharded_cert(7), Topic::ShardedCertificate(7));
     }
+
+    // ── Additional coverage: PeerId from_libp2p / from_digest / Display ──
+
+    #[test]
+    fn peer_id_from_libp2p_is_deterministic() {
+        let libp2p_id = libp2p::PeerId::random();
+        let a = PeerId::from_libp2p(&libp2p_id);
+        let b = PeerId::from_libp2p(&libp2p_id);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn peer_id_from_libp2p_differs_per_peer() {
+        let id1 = PeerId::from_libp2p(&libp2p::PeerId::random());
+        let id2 = PeerId::from_libp2p(&libp2p::PeerId::random());
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn peer_id_from_digest_roundtrip() {
+        let pk = b"roundtrip-key";
+        let original = PeerId::from_public_key(pk);
+        let rebuilt = PeerId::from_digest(*original.digest());
+        assert_eq!(original, rebuilt);
+        assert_eq!(original.as_bytes(), rebuilt.as_bytes());
+    }
+
+    #[test]
+    fn peer_id_debug_format() {
+        let id = PeerId::from_public_key(b"debug");
+        let dbg = format!("{:?}", id);
+        assert!(dbg.starts_with("PeerId("), "debug: {dbg}");
+        assert!(dbg.contains('…'));
+    }
+
+    #[test]
+    fn topic_display_matches_topic_string() {
+        for topic in Topic::global_topics() {
+            assert_eq!(format!("{}", topic), topic.topic_string());
+        }
+        let sharded = Topic::ShardedTransaction(9);
+        assert_eq!(format!("{}", sharded), sharded.topic_string());
+    }
+
+    #[test]
+    fn connection_state_banned_is_not_connected() {
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        assert!(!ConnectionState::Banned { until }.is_connected());
+    }
+
+    #[test]
+    fn routing_health_boundary() {
+        // Exactly at threshold: 3 buckets, 6 peers → healthy
+        assert!(RoutingHealth { known_peers: 6, filled_buckets: 3, total_buckets: 256 }.is_healthy());
+        // Just below: 3 buckets, 5 peers → not healthy
+        assert!(!RoutingHealth { known_peers: 5, filled_buckets: 3, total_buckets: 256 }.is_healthy());
+        // 2 buckets, 6 peers → not healthy
+        assert!(!RoutingHealth { known_peers: 6, filled_buckets: 2, total_buckets: 256 }.is_healthy());
+    }
+
+    #[test]
+    fn global_topics_count() {
+        assert_eq!(Topic::global_topics().len(), 4);
+    }
+
+    #[test]
+    fn shard_topics_zero_shards() {
+        assert!(Topic::shard_topics(0).is_empty());
+    }
+
+    #[test]
+    fn message_type_unknown_bytes() {
+        for b in 5..=10 {
+            assert!(MessageType::from_byte(b).is_none());
+        }
+    }
 }

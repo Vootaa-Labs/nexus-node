@@ -641,10 +641,30 @@ jobs:
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --version 0.6.21 --locked
 
-      - name: Generate coverage report
+      - name: Generate coverage artifacts
+        run: make coverage-docs
+
+      - name: Publish coverage summary
         run: |
-          cargo llvm-cov --workspace \
-            --lcov --output-path lcov.info
+          python3 scripts/write_coverage_ci_summary.py \
+            --scorecard-json target/llvm-cov/package-scorecard.json \
+            --output target/llvm-cov/ci-summary.md
+          cat target/llvm-cov/ci-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce P0/P1 coverage gates
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          data = json.loads(open("target/llvm-cov/package-scorecard.json").read())
+          failures = [
+              p["package"] for p in data.get("packages", [])
+              if p.get("status") == "below-target"
+          ]
+          if failures:
+              print(f"::error::Coverage gate FAILED — below target: {', '.join(failures)}")
+              sys.exit(1)
+          print(f"Coverage gate PASSED — all {len(data['packages'])} tracked packages meet their targets.")
+          EOF
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
@@ -653,6 +673,20 @@ jobs:
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v5.0.2
+        with:
+          name: coverage-artifacts
+          path: |
+            lcov.info
+            target/llvm-cov/coverage-summary.json
+            target/llvm-cov/package-scorecard.json
+            target/llvm-cov/package-scorecard.md
+            target/llvm-cov/ci-summary.md
+            target/llvm-cov/html/**
+            Docs/en/Report/Coverage_Report_v*.md
+            Docs/zh/Report/Coverage_Report_v*.md
 
   # --------------------------------------------------------------------------
   # Gate 5: Crypto KAT (Known Answer Tests — NIST vectors)

@@ -276,4 +276,157 @@ mod tests {
             .to_string()
             .contains("overly permissive"));
     }
+
+    // ── Additional coverage: parse_json_key_file, verify key loading ─────
+
+    #[test]
+    fn parse_json_key_file_valid() {
+        let json = serde_json::json!({ "hex": "abcdef1234" });
+        let result = parse_json_key_file(&json.to_string()).unwrap();
+        assert_eq!(result, "abcdef1234");
+    }
+
+    #[test]
+    fn parse_json_key_file_missing_hex_field() {
+        let result = parse_json_key_file(r#"{ "other": "value" }"#);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_json_key_file_invalid_json() {
+        let result = parse_json_key_file("not json at all");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn load_validator_keys_not_a_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file_path = tmp.path().join("a-file");
+        std::fs::write(&file_path, "hello").unwrap();
+        let result = load_validator_keys(&file_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not a directory"));
+    }
+
+    #[test]
+    fn load_verify_key_hex_format() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (sk, vk) = FalconSigner::generate_keypair();
+
+        // Write keys in hex format
+        let sk_path = tmp.path().join("falcon.sk");
+        let vk_path = tmp.path().join("falcon.vk");
+        std::fs::write(&sk_path, hex::encode(sk.as_bytes())).unwrap();
+        std::fs::write(&vk_path, hex::encode(vk.as_bytes())).unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&sk_path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+
+        // load_or_derive_verify_key should find falcon.vk
+        let loaded_vk = load_or_derive_verify_key(tmp.path(), &sk).unwrap();
+        assert_eq!(loaded_vk.as_bytes(), vk.as_bytes());
+    }
+
+    #[test]
+    fn load_verify_key_json_format() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (sk, vk) = FalconSigner::generate_keypair();
+
+        // Write verify key as JSON only
+        let vk_json = serde_json::json!({
+            "algorithm": "Falcon-512",
+            "key_type": "public",
+            "hex": hex::encode(vk.as_bytes()),
+        });
+        std::fs::write(tmp.path().join("falcon-public.json"), vk_json.to_string()).unwrap();
+
+        let loaded_vk = load_or_derive_verify_key(tmp.path(), &sk).unwrap();
+        assert_eq!(loaded_vk.as_bytes(), vk.as_bytes());
+    }
+
+    #[test]
+    fn load_verify_key_missing_file_fails() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (sk, _vk) = FalconSigner::generate_keypair();
+        // No public key file
+        let result = load_or_derive_verify_key(tmp.path(), &sk);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("no Falcon public key"));
+    }
+
+    #[test]
+    fn load_verify_key_bad_hex_fails() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (sk, _) = FalconSigner::generate_keypair();
+        std::fs::write(tmp.path().join("falcon.vk"), "not_valid_hex!!!").unwrap();
+        let result = load_or_derive_verify_key(tmp.path(), &sk);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid hex"));
+    }
+
+    #[test]
+    fn load_verify_key_bad_bytes_fails() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (sk, _) = FalconSigner::generate_keypair();
+        // Valid hex but not valid Falcon key bytes
+        std::fs::write(tmp.path().join("falcon.vk"), hex::encode([0u8; 32])).unwrap();
+        let result = load_or_derive_verify_key(tmp.path(), &sk);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid key bytes"));
+    }
+
+    #[test]
+    fn load_validator_keys_bad_secret_hex() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sk_json = serde_json::json!({
+            "algorithm": "Falcon-512",
+            "key_type": "secret",
+            "hex": "not_valid_hex!!!",
+        });
+        let sk_path = tmp.path().join("falcon-secret.json");
+        std::fs::write(&sk_path, sk_json.to_string()).unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&sk_path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+
+        let result = load_validator_keys(tmp.path());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid hex"));
+    }
+
+    #[test]
+    fn load_validator_keys_bad_secret_bytes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sk_json = serde_json::json!({
+            "algorithm": "Falcon-512",
+            "key_type": "secret",
+            "hex": hex::encode([0u8; 32]),
+        });
+        let sk_path = tmp.path().join("falcon-secret.json");
+        std::fs::write(&sk_path, sk_json.to_string()).unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&sk_path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+
+        let result = load_validator_keys(tmp.path());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid key bytes"));
+    }
+
+    #[test]
+    fn debug_hides_key_material() {
+        let kp = generate_dev_keys();
+        let dbg = format!("{:?}", kp);
+        assert!(dbg.contains("<redacted>"));
+        assert!(!dbg.contains(&hex::encode(kp.signing_key.as_bytes())));
+    }
 }

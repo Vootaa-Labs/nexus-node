@@ -89,3 +89,34 @@ pub fn run(args: UpgradeArgs) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_args(package_dir: &std::path::Path) -> UpgradeArgs {
+        UpgradeArgs {
+            package: package_dir.to_path_buf(),
+            contract: hex::encode([0u8; 32]),
+            key_file: None,
+            gas_limit: 2_000_000,
+            rpc_url: "http://127.0.0.1:8080".into(),
+        }
+    }
+
+    #[test]
+    fn run_rejects_invalid_rpc_url() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut args = base_args(dir.path());
+        args.rpc_url = "ftp://invalid".into();
+        assert!(run(args).is_err());
+    }
+
+    #[test]
+    fn run_requires_key_file() {
+        // key_file = None → bail! before any filesystem or network call.
+        let dir = tempfile::TempDir::new().unwrap();
+        let err = run(base_args(dir.path())).unwrap_err().to_string();
+        assert!(err.contains("--key-file"), "unexpected: {err}");
+    }
+}

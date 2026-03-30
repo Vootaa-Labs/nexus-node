@@ -171,3 +171,164 @@ pub enum IntentError {
 
 /// Convenience alias used throughout the intent layer.
 pub type IntentResult<T> = Result<T, IntentError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nexus_primitives::{AccountAddress, ContractAddress, IntentId, ShardId, TokenId};
+
+    #[test]
+    fn intent_expired_display() {
+        let e = IntentError::IntentExpired {
+            deadline_ms: 5,
+            current_ms: 10,
+        };
+        assert_eq!(
+            e.to_string(),
+            "intent expired: deadline 5 < current time 10"
+        );
+    }
+
+    #[test]
+    fn stale_nonce_display() {
+        let sender = AccountAddress([0u8; 32]);
+        let e = IntentError::StaleNonce {
+            sender,
+            expected: 5,
+            got: 4,
+        };
+        assert_eq!(
+            e.to_string(),
+            format!("stale nonce for {sender}: expected >= 5, got 4")
+        );
+    }
+
+    #[test]
+    fn intent_too_large_display() {
+        let e = IntentError::IntentTooLarge {
+            size: 1000,
+            max: 512,
+        };
+        assert_eq!(e.to_string(), "intent too large: 1000 bytes (max 512)");
+    }
+
+    #[test]
+    fn parse_error_display() {
+        let e = IntentError::ParseError {
+            reason: "unexpected token".to_string(),
+        };
+        assert_eq!(e.to_string(), "intent parse error: unexpected token");
+    }
+
+    #[test]
+    fn agent_spec_error_display() {
+        let e = IntentError::AgentSpecError {
+            reason: "missing field".to_string(),
+        };
+        assert_eq!(e.to_string(), "agent spec error: missing field");
+    }
+
+    #[test]
+    fn account_not_found_display() {
+        let account = AccountAddress([0xABu8; 32]);
+        let e = IntentError::AccountNotFound { account };
+        assert_eq!(e.to_string(), format!("account not found: {account}"));
+    }
+
+    #[test]
+    fn insufficient_balance_display() {
+        let account = AccountAddress([1u8; 32]);
+        let e = IntentError::InsufficientBalance {
+            account,
+            token: TokenId::Native,
+            required: 100,
+            available: 50,
+        };
+        assert_eq!(
+            e.to_string(),
+            format!("insufficient balance for {account}: need 100, have 50 of Native")
+        );
+    }
+
+    #[test]
+    fn contract_not_found_display() {
+        let contract = ContractAddress([0u8; 32]);
+        let e = IntentError::ContractNotFound { contract };
+        assert_eq!(e.to_string(), format!("contract not found: {contract}"));
+    }
+
+    #[test]
+    fn too_many_steps_display() {
+        let e = IntentError::TooManySteps { steps: 10, max: 5 };
+        assert_eq!(e.to_string(), "too many steps: 10 (max 5)");
+    }
+
+    #[test]
+    fn no_route_display() {
+        let e = IntentError::NoRoute {
+            from: ShardId(0),
+            to: ShardId(1),
+        };
+        assert_eq!(e.to_string(), "no route from shard 0 to shard 1");
+    }
+
+    #[test]
+    fn gas_budget_exceeded_display() {
+        let e = IntentError::GasBudgetExceeded {
+            estimated: 2_000,
+            budget: 1_000,
+        };
+        assert_eq!(
+            e.to_string(),
+            "gas budget exceeded: estimated 2000, budget 1000"
+        );
+    }
+
+    #[test]
+    fn agent_capability_denied_display() {
+        let e = IntentError::AgentCapabilityDenied {
+            reason: "revoked".to_string(),
+        };
+        assert_eq!(e.to_string(), "agent capability denied: revoked");
+    }
+
+    #[test]
+    fn agent_value_limit_exceeded_display() {
+        let e = IntentError::AgentValueLimitExceeded {
+            value: 100,
+            limit: 50,
+        };
+        assert_eq!(e.to_string(), "agent value limit exceeded: 100 > 50");
+    }
+
+    #[test]
+    fn codec_display() {
+        let e = IntentError::Codec("bad bytes".to_string());
+        assert_eq!(e.to_string(), "codec error: bad bytes");
+    }
+
+    #[test]
+    fn compile_timeout_display() {
+        let intent_id = IntentId::from_bytes([0u8; 32]);
+        let e = IntentError::CompileTimeout {
+            intent_id,
+            timeout_ms: 100,
+        };
+        assert_eq!(
+            e.to_string(),
+            format!("compile timeout after 100 ms for intent {intent_id}")
+        );
+    }
+
+    #[test]
+    fn internal_display() {
+        let e = IntentError::Internal("unexpected state".to_string());
+        assert_eq!(e.to_string(), "internal: unexpected state");
+    }
+
+    #[test]
+    fn storage_display() {
+        let e = IntentError::Storage("disk full".to_string());
+        assert_eq!(e.to_string(), "storage error: disk full");
+    }
+}

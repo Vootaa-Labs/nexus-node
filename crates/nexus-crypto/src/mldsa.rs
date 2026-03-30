@@ -297,4 +297,88 @@ mod tests {
         let restored = DilithiumVerifyKey::from_bytes(vk.as_bytes()).unwrap();
         assert_eq!(vk.as_bytes(), restored.as_bytes());
     }
+
+    #[test]
+    fn debug_formats_expose_only_safe_metadata() {
+        let (sk, vk) = DilithiumSigner::generate_keypair();
+        let sig = DilithiumSigner::sign(&sk, domains::USER_TX, b"debug");
+
+        let verify_debug = format!("{:?}", vk);
+        let signature_debug = format!("{:?}", sig);
+
+        assert!(verify_debug.starts_with("DilithiumVerifyKey("));
+        assert!(verify_debug.ends_with("…)"));
+        assert_eq!(
+            signature_debug,
+            format!("DilithiumSignature({}B)", sig.as_bytes().len())
+        );
+    }
+
+    #[test]
+    fn signing_key_from_bytes_rejects_wrong_length() {
+        let err = DilithiumSigningKey::from_bytes(&[7u8; 31]).unwrap_err();
+        match err {
+            NexusCryptoError::InvalidKey { reason } => {
+                assert!(reason.contains("expected 32"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn verify_key_from_bytes_rejects_wrong_length() {
+        let err = DilithiumVerifyKey::from_bytes(&[9u8; 12]).unwrap_err();
+        match err {
+            NexusCryptoError::InvalidKey { reason } => {
+                assert!(reason.contains("expected 1952"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn signature_from_bytes_rejects_corrupt_bytes() {
+        let err = DilithiumSignature::from_bytes(&[3u8; 8]).unwrap_err();
+        match err {
+            NexusCryptoError::InvalidSignature { reason } => {
+                assert!(reason.contains("cannot decode"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn verify_rejects_corrupt_signature_bytes() {
+        let (_sk, vk) = DilithiumSigner::generate_keypair();
+        let corrupt_sig = DilithiumSignature {
+            bytes: vec![0u8; 16],
+        };
+
+        let err = DilithiumSigner::verify(&vk, domains::USER_TX, b"msg", &corrupt_sig).unwrap_err();
+        match err {
+            NexusCryptoError::InvalidSignature { reason } => {
+                assert!(reason.contains("corrupt ML-DSA-65 signature bytes"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn keypair_from_seed_is_deterministic() {
+        let seed = [0x42u8; 32];
+        let (sk1, vk1) = DilithiumSigner::keypair_from_seed(&seed);
+        let (sk2, vk2) = DilithiumSigner::keypair_from_seed(&seed);
+
+        assert_eq!(sk1.as_bytes(), sk2.as_bytes());
+        assert_eq!(vk1.as_bytes(), vk2.as_bytes());
+    }
+
+    #[test]
+    fn scheme_size_constants_match_encoded_outputs() {
+        let (sk, vk) = DilithiumSigner::generate_keypair();
+        let sig = DilithiumSigner::sign(&sk, domains::USER_TX, b"size-check");
+
+        assert_eq!(vk.as_bytes().len(), DilithiumSigner::verify_key_size());
+        assert_eq!(sig.as_bytes().len(), DilithiumSigner::signature_size());
+    }
 }

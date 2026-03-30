@@ -108,3 +108,43 @@ pub fn run(args: TransferArgs) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_args() -> TransferArgs {
+        TransferArgs {
+            key_file: None,
+            to: hex::encode([0u8; 32]),
+            amount: 100,
+            gas_limit: 100_000,
+            gas_price: 1,
+            nonce: 0,
+            chain_id: 1,
+            rpc_url: "http://127.0.0.1:8080".into(),
+            poll_attempts: 1,
+        }
+    }
+
+    #[test]
+    fn run_rejects_invalid_rpc_url() {
+        let mut args = base_args();
+        args.rpc_url = "ws://invalid".into();
+        assert!(run(args).is_err());
+    }
+
+    #[test]
+    fn run_requires_key_file() {
+        // key_file = None → bail! before any network or address parsing.
+        let err = run(base_args()).unwrap_err().to_string();
+        assert!(err.contains("--key-file"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn run_rejects_wss_rpc_url() {
+        let mut args = base_args();
+        args.rpc_url = "wss://node.example.com".into();
+        assert!(run(args).is_err());
+    }
+}

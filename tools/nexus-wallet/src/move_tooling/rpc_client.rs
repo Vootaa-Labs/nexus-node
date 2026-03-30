@@ -300,7 +300,12 @@ pub fn request_faucet(rpc_url: &str, address: &AccountAddress) -> Result<FaucetR
 
 #[cfg(test)]
 mod tests {
-    use super::{TxStatusResponse, TxSubmitResponse};
+    use super::{
+        ephemeral_identity, sign_transaction, validate_rpc_url, TxStatusResponse, TxSubmitResponse,
+    };
+    use nexus_crypto::{DilithiumSigner, Signer};
+    use nexus_execution::types::{TransactionBody, TransactionPayload};
+    use nexus_primitives::{AccountAddress, Amount, EpochNumber, TokenId};
 
     #[test]
     fn submit_response_accepts_hex_digest() {
@@ -340,5 +345,201 @@ mod tests {
         assert_eq!(response._tx_digest, "ca".repeat(32));
         assert_eq!(response.status, serde_json::json!("success"));
         assert_eq!(response.gas_used, 42);
+    }
+
+    // ── validate_rpc_url ─────────────────────────────────────────────
+
+    #[test]
+    fn validate_rpc_url_accepts_http_scheme() {
+        assert!(validate_rpc_url("http://localhost:8080").is_ok());
+    }
+
+    #[test]
+    fn validate_rpc_url_accepts_https_scheme() {
+        assert!(validate_rpc_url("https://node.example.com:8080/rpc").is_ok());
+    }
+
+    #[test]
+    fn validate_rpc_url_rejects_bare_hostname() {
+        let err = validate_rpc_url("localhost:8080").unwrap_err();
+        assert!(err.to_string().contains("http://"));
+    }
+
+    #[test]
+    fn validate_rpc_url_rejects_ws_scheme() {
+        assert!(validate_rpc_url("ws://example.com").is_err());
+    }
+
+    #[test]
+    fn validate_rpc_url_rejects_wss_scheme() {
+        assert!(validate_rpc_url("wss://example.com").is_err());
+    }
+
+    // ── ephemeral_identity ───────────────────────────────────────────
+
+    #[test]
+    fn ephemeral_identity_derives_address_from_pubkey() {
+        let id = ephemeral_identity();
+        let expected = AccountAddress::from_dilithium_pubkey(id.pk.as_bytes());
+        assert_eq!(id.address, expected);
+    }
+
+    #[test]
+    fn ephemeral_identities_are_distinct() {
+        let a = ephemeral_identity();
+        let b = ephemeral_identity();
+        assert_ne!(a.address, b.address);
+    }
+
+    // ── sign_transaction ─────────────────────────────────────────────
+
+    fn sample_body(sender: AccountAddress) -> TransactionBody {
+        TransactionBody {
+            sender,
+            sequence_number: 0,
+            expiry_epoch: EpochNumber(9999),
+            gas_limit: 10_000,
+            gas_price: 1,
+            target_shard: None,
+            payload: TransactionPayload::Transfer {
+                recipient: AccountAddress([0xBB; 32]),
+                amount: Amount(100),
+                token: TokenId::Native,
+            },
+            chain_id: 1,
+        }
+    }
+
+    #[test]
+    fn sign_transaction_produces_signed_tx_with_matching_body() {
+        let id = ephemeral_identity();
+        let body = sample_body(id.address);
+        let signed = sign_transaction(&id, body.clone()).unwrap();
+        assert_eq!(signed.body, body);
+        assert_eq!(signed.sender_pk.as_bytes(), id.pk.as_bytes());
+    }
+
+    #[test]
+    fn sign_transaction_digest_is_deterministic() {
+        let id = ephemeral_identity();
+        let body = sample_body(id.address);
+        let s1 = sign_transaction(&id, body.clone()).unwrap();
+        let s2 = sign_transaction(&id, body).unwrap();
+        assert_eq!(s1.digest, s2.digest);
+    }
+
+    // ── deserialize_digest_string ByteVec wrong length ───────────────
+
+    #[test]
+    fn submit_response_rejects_short_byte_vec_digest() {
+        let result: serde_json::Result<TxSubmitResponse> =
+            serde_json::from_str(r#"{"tx_digest":[1,2,3,4],"accepted":true}"#);
+        assert!(result.is_err(), "short ByteVec should fail deserialization");
+    }
+
+    #[test]
+    fn submit_response_rejects_empty_byte_vec_digest() {
+        let result: serde_json::Result<TxSubmitResponse> =
+            serde_json::from_str(r#"{"tx_digest":[],"accepted":true}"#);
+        assert!(result.is_err(), "empty ByteVec should fail deserialization");
+    }
+
+    // ── load_identity ────────────────────────────────────────────────
+
+    #[test]
+    fn load_identity_json_format() {
+        use nexus_crypto::{DilithiumSigner, Signer};
+        let dir = tempfile::tempdir().unwrap();
+        let (sk, _pk) = DilithiumSigner::generate_keypair();
+        let key_json = serde_json::json!({
+            "algorithm": "Dilithium3",
+            "key_type": "secret",
+            "hex": hex::encode(sk.as_bytes()),
+        });
+        let path = dir.path().join("dilithium-secret.json");
+        std::fs::write(&path, key_json.to_string()).unwrap();
+
+        let id = super::load_identity(&path).unwrap();
+        assert_ne!(id.address, AccountAddress([0u8; 32]));
+    }
+
+    #[test]
+    fn load_identity_hex_format() {
+        use nexus_crypto::{DilithiumSigner, Signer};
+        let dir = tempfile::tempdir().unwrap();
+        let (sk, _pk) = DilithiumSigner::generate_keypair();
+        let path = dir.path().join("dilithium.sk");
+        std::fs::write(&path, hex::encode(sk.as_bytes())).unwrap();
+
+        let id = super::load_identity(&path).unwrap();
+        assert_ne!(id.address, AccountAddress([0u8; 32]));
+    }
+
+    #[test]
+    fn load_identity_missing_file_fails() {
+        let result = super::load_identity(std::path::Path::new("/nonexistent/key.json"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn load_identity_bad_json_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad.json");
+        std::fs::write(&path, "{ not valid json").unwrap();
+        let result = super::load_identity(&path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn load_identity_bad_hex_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad.hex");
+        std::fs::write(&path, "ZZZZ_not_hex").unwrap();
+        let result = super::load_identity(&path);
+        assert!(result.is_err());
+    }
+
+    // ── ContractQueryRequest serialization ───────────────────────────
+
+    #[test]
+    fn contract_query_request_serializes() {
+        let req = super::ContractQueryRequest {
+            contract: hex::encode([0u8; 32]),
+            function: "mod::func".to_string(),
+            type_args: vec![],
+            args: vec!["01".to_string()],
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["function"], "mod::func");
+    }
+
+    // ── http_agent ───────────────────────────────────────────────────
+
+    #[test]
+    fn http_agent_is_constructible() {
+        let _agent = super::http_agent();
+    }
+
+    // ── derive_keypair_from_sk ──────────────────────────────────────
+
+    #[test]
+    fn derive_keypair_from_sk_round_trips() {
+        let (sk, _pk) = DilithiumSigner::generate_keypair();
+        let result = super::derive_keypair_from_sk(&sk);
+        assert!(result.is_ok());
+        let (derived_sk, derived_pk) = result.unwrap();
+        // Deriving from the same seed should yield the same keypair.
+        let (sk2, pk2) = super::derive_keypair_from_sk(&derived_sk).unwrap();
+        assert_eq!(derived_pk.as_bytes(), pk2.as_bytes());
+        let _ = sk2; // use binding
+    }
+
+    #[test]
+    fn derive_keypair_address_matches_pubkey() {
+        let (sk, _) = DilithiumSigner::generate_keypair();
+        let (_, pk) = super::derive_keypair_from_sk(&sk).unwrap();
+        let addr = AccountAddress::from_dilithium_pubkey(pk.as_bytes());
+        // Just verify address is non-zero (derived from pubkey)
+        assert_ne!(addr.0, [0u8; 32]);
     }
 }

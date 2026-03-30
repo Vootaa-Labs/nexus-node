@@ -170,4 +170,25 @@ mod tests {
         g2.chain_id = "nexus-test-different".to_owned();
         assert_ne!(g1.genesis_hash(), g2.genesis_hash());
     }
+
+    #[test]
+    fn genesis_hash_path_returns_expected() {
+        let p = genesis_hash_path(Path::new("/nexus/data"));
+        assert_eq!(p, PathBuf::from("/nexus/data/genesis-hash"));
+    }
+
+    #[test]
+    fn read_trimmed_strips_whitespace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("trimmed.txt");
+        std::fs::write(&path, "  hello world  \n").unwrap();
+        let result = read_trimmed(&path).unwrap();
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn read_trimmed_missing_file_returns_error() {
+        let result = read_trimmed(Path::new("/nonexistent/file.txt"));
+        assert!(result.is_err());
+    }
 }

@@ -272,4 +272,31 @@ mod tests {
         registry.register(addr, key2.clone());
         assert_eq!(registry.lookup(&addr).unwrap().as_bytes(), key2.as_bytes());
     }
+
+    #[test]
+    fn all_entries_returns_all_registered_keys() {
+        use nexus_crypto::{FalconSigner, Signer};
+        let registry = ValidatorIdentityRegistry::new();
+        assert!(registry.all_entries().is_empty());
+
+        let addr0 = address_from_validator_index(ValidatorIndex(0));
+        let addr1 = address_from_validator_index(ValidatorIndex(1));
+        let (_, key0) = FalconSigner::generate_keypair();
+        let (_, key1) = FalconSigner::generate_keypair();
+
+        registry.register(addr0, key0);
+        registry.register(addr1, key1);
+
+        let entries = registry.all_entries();
+        assert_eq!(entries.len(), 2);
+        assert!(!registry.is_empty());
+    }
+
+    #[test]
+    fn identity_key_prefix_includes_address() {
+        let addr = address_from_validator_index(ValidatorIndex(0));
+        let key_bytes = identity_key(&addr);
+        assert!(key_bytes.starts_with(b"__validator_identity__:"));
+        assert_eq!(&key_bytes[b"__validator_identity__:".len()..], &addr.0[..]);
+    }
 }

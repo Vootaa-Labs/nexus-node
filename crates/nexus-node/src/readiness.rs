@@ -555,4 +555,40 @@ mod tests {
         // With a 60 s threshold, nothing should be stalled.
         assert_eq!(nr.status(), NodeStatus::Healthy);
     }
+
+    #[test]
+    fn subsystem_status_as_str_all_variants() {
+        assert_eq!(SubsystemStatus::Starting.as_str(), "starting");
+        assert_eq!(SubsystemStatus::Ready.as_str(), "ready");
+        assert_eq!(SubsystemStatus::Degraded.as_str(), "degraded");
+        assert_eq!(SubsystemStatus::Down.as_str(), "down");
+    }
+
+    #[test]
+    fn node_status_as_str_all_variants() {
+        assert_eq!(NodeStatus::Bootstrapping.as_str(), "bootstrapping");
+        assert_eq!(NodeStatus::Syncing.as_str(), "syncing");
+        assert_eq!(NodeStatus::Healthy.as_str(), "healthy");
+        assert_eq!(NodeStatus::Degraded.as_str(), "degraded");
+        assert_eq!(NodeStatus::Halted.as_str(), "halted");
+    }
+
+    #[test]
+    fn node_status_is_ready_all_variants() {
+        assert!(NodeStatus::Healthy.is_ready());
+        assert!(NodeStatus::Degraded.is_ready());
+        assert!(!NodeStatus::Bootstrapping.is_ready());
+        assert!(!NodeStatus::Syncing.is_ready());
+        assert!(!NodeStatus::Halted.is_ready());
+    }
+
+    #[test]
+    fn subsystem_snapshot_covers_down_status() {
+        let nr = NodeReadiness::new();
+        nr.storage_handle().set_down();
+        let snap = nr.subsystem_snapshot();
+        assert_eq!(snap[0].status, "down");
+        // Other handles still starting.
+        assert_eq!(snap[1].status, "starting");
+    }
 }

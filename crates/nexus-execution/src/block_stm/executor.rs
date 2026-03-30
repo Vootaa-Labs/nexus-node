@@ -1019,6 +1019,807 @@ pub(crate) fn parse_balance(raw: &Option<Vec<u8>>) -> u64 {
         .unwrap_or(0)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::move_adapter::{MoveVm, VmConfig, VmOutput};
+    use crate::traits::StateView;
+    use crate::types::{TransactionBody, TX_DOMAIN};
+    use nexus_crypto::{
+        DilithiumSigner, DilithiumSigningKey, DilithiumVerifyKey, Signer as CryptoSigner,
+    };
+    use std::sync::{Arc, Mutex};
+
+    struct MemState {
+        data: HashMap<(AccountAddress, Vec<u8>), Vec<u8>>,
+    }
+
+    impl MemState {
+        fn new() -> Self {
+            Self {
+                data: HashMap::new(),
+            }
+        }
+
+        fn set_raw(&mut self, account: AccountAddress, key: &[u8], value: Vec<u8>) {
+            self.data.insert((account, key.to_vec()), value);
+        }
+
+        fn set_u64(&mut self, account: AccountAddress, key: &[u8], value: u64) {
+            self.set_raw(account, key, value.to_le_bytes().to_vec());
+        }
+    }
+
+    impl StateView for MemState {
+        fn get(&self, account: &AccountAddress, key: &[u8]) -> ExecutionResult<Option<Vec<u8>>> {
+            Ok(self.data.get(&(*account, key.to_vec())).cloned())
+        }
+    }
+
+    struct TestAccount {
+        sk: DilithiumSigningKey,
+        pk: DilithiumVerifyKey,
+        address: AccountAddress,
+    }
+
+    impl TestAccount {
+        fn random() -> Self {
+            let (sk, pk) = DilithiumSigner::generate_keypair();
+            let address = AccountAddress::from_dilithium_pubkey(pk.as_bytes());
+            Self { sk, pk, address }
+        }
+    }
+
+    struct MockVm {
+        calls: Arc<Mutex<Vec<&'static str>>>,
+        publish_output: VmOutput,
+        script_output: VmOutput,
+    }
+
+    impl MockVm {
+        fn success(calls: Arc<Mutex<Vec<&'static str>>>) -> Self {
+            let mut write_set = HashMap::new();
+            write_set.insert(
+                (AccountAddress([0x44; 32]), b"script_result".to_vec()),
+                Some(vec![9, 9, 9]),
+            );
+            let state_changes = vec![StateChange {
+                account: AccountAddress([0x44; 32]),
+                key: b"script_result".to_vec(),
+                value: Some(vec![9, 9, 9]),
+            }];
+            Self {
+                calls,
+                publish_output: VmOutput {
+                    status: ExecutionStatus::Success,
+                    gas_used: 22,
+                    state_changes: Vec::new(),
+                    write_set: HashMap::new(),
+                },
+                script_output: VmOutput {
+                    status: ExecutionStatus::Success,
+                    gas_used: 33,
+                    state_changes,
+                    write_set,
+                },
+            }
+        }
+    }
+
+    impl MoveVm for MockVm {
+        fn execute_function(
+            &self,
+            _state: &NexusStateView<'_>,
+            _sender: AccountAddress,
+            _contract: AccountAddress,
+            _function: &str,
+            _type_args: &[Vec<u8>],
+            _args: &[Vec<u8>],
+            _gas_limit: u64,
+        ) -> ExecutionResult<VmOutput> {
+            unreachable!("execute_function is not exercised in these executor tests")
+        }
+
+        fn publish_modules(
+            &self,
+            _state: &NexusStateView<'_>,
+            _sender: AccountAddress,
+            _modules: &[Vec<u8>],
+            _gas_limit: u64,
+        ) -> ExecutionResult<VmOutput> {
+            self.calls.lock().unwrap().push("publish_modules");
+            Ok(self.publish_output.clone())
+        }
+
+        fn execute_script(
+            &self,
+            _state: &NexusStateView<'_>,
+            _sender: AccountAddress,
+            _bytecode: &[u8],
+            _type_args: &[Vec<u8>],
+            _args: &[Vec<u8>],
+            _gas_limit: u64,
+        ) -> ExecutionResult<VmOutput> {
+            self.calls.lock().unwrap().push("execute_script");
+            Ok(self.script_output.clone())
+        }
+    }
+
+    fn make_signed_tx(
+        sender: &TestAccount,
+        payload: TransactionPayload,
+        sequence_number: u64,
+    ) -> SignedTransaction {
+        let body = TransactionBody {
+            sender: sender.address,
+            sequence_number,
+            expiry_epoch: EpochNumber(100),
+            gas_limit: 50_000,
+            gas_price: 1,
+            target_shard: Some(ShardId(0)),
+            payload,
+            chain_id: 1,
+        };
+        let digest = compute_tx_digest(&body).unwrap();
+        let signature = DilithiumSigner::sign(&sender.sk, TX_DOMAIN, digest.as_bytes());
+        SignedTransaction {
+            body,
+            signature,
+            sender_pk: sender.pk.clone(),
+            digest,
+        }
+    }
+
+    fn make_lock_record(
+        lock_digest: Blake3Digest,
+        sender: AccountAddress,
+        recipient: AccountAddress,
+        status: HtlcStatus,
+        timeout_epoch: EpochNumber,
+        lock_hash: Blake3Digest,
+    ) -> HtlcLockRecord {
+        HtlcLockRecord {
+            lock_digest,
+            sender,
+            recipient,
+            amount: Amount(25),
+            source_shard: ShardId(0),
+            target_shard: ShardId(1),
+            lock_hash,
+            timeout_epoch,
+            status,
+            created_epoch: EpochNumber(1),
+        }
+    }
+
+    #[test]
+    fn move_error_to_record_maps_supported_errors_and_propagates_fatal_ones() {
+        let read_key = StateKey {
+            account: AccountAddress([0xAA; 32]),
+            key: b"k".to_vec(),
+        };
+        let read_set = HashMap::from([(read_key.clone(), Some(vec![1, 2, 3]))]);
+
+        let abort = move_error_to_record(
+            ExecutionError::MoveAbort {
+                location: "0x1::counter::bump".into(),
+                code: 7,
+            },
+            read_set.clone(),
+        )
+        .unwrap();
+        assert!(matches!(
+            abort.status,
+            ExecutionStatus::MoveAbort { code: 7, .. }
+        ));
+        assert_eq!(abort.read_set.get(&read_key), Some(&Some(vec![1, 2, 3])));
+
+        let out_of_gas = move_error_to_record(
+            ExecutionError::OutOfGas { used: 9, limit: 8 },
+            HashMap::new(),
+        )
+        .unwrap();
+        assert_eq!(out_of_gas.status, ExecutionStatus::OutOfGas);
+
+        let vm_error = move_error_to_record(
+            ExecutionError::BytecodeVerification {
+                reason: "bad module".into(),
+            },
+            HashMap::new(),
+        )
+        .unwrap();
+        assert!(matches!(
+            vm_error.status,
+            ExecutionStatus::MoveVmError { ref reason } if reason == "bad module"
+        ));
+
+        let fatal =
+            move_error_to_record(ExecutionError::Storage("disk full".into()), HashMap::new());
+        assert!(matches!(fatal, Err(ExecutionError::Storage(_))));
+    }
+
+    #[test]
+    fn execute_single_tx_move_script_delegates_to_vm_and_merges_write_sets() {
+        let sender = TestAccount::random();
+        let mut state = MemState::new();
+        state.set_u64(sender.address, SEQUENCE_NUMBER_KEY, 0);
+        let overlay = MvOverlay::new(&state);
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let move_executor = MoveExecutor::with_vm(
+            Box::new(MockVm::success(calls.clone())),
+            VmConfig::default(),
+        );
+        let tx = make_signed_tx(
+            &sender,
+            TransactionPayload::MoveScript {
+                bytecode: vec![1, 2, 3],
+                type_args: vec![],
+                args: vec![vec![4, 5, 6]],
+            },
+            0,
+        );
+
+        let record = execute_single_tx(&tx, 0, &overlay, &move_executor).unwrap();
+
+        assert_eq!(record.status, ExecutionStatus::Success);
+        assert_eq!(record.gas_used, 33);
+        assert_eq!(*calls.lock().unwrap(), vec!["execute_script"]);
+        assert!(record.write_set.contains_key(&StateKey {
+            account: sender.address,
+            key: SEQUENCE_NUMBER_KEY.to_vec(),
+        }));
+        assert!(record.write_set.contains_key(&StateKey {
+            account: AccountAddress([0x44; 32]),
+            key: b"script_result".to_vec(),
+        }));
+        assert_eq!(record.state_changes.len(), 2);
+    }
+
+    #[test]
+    fn execute_single_tx_provenance_anchor_writes_serialized_anchor_entry() {
+        let sender = TestAccount::random();
+        let mut state = MemState::new();
+        state.set_u64(sender.address, SEQUENCE_NUMBER_KEY, 0);
+        let overlay = MvOverlay::new(&state);
+        let move_executor = MoveExecutor::with_builtin(VmConfig::default());
+        let anchor_digest = Blake3Digest([0xAB; 32]);
+        let tx = make_signed_tx(
+            &sender,
+            TransactionPayload::ProvenanceAnchor {
+                anchor_digest,
+                batch_seq: 42,
+                record_count: 3,
+            },
+            0,
+        );
+
+        let record = execute_single_tx(&tx, 0, &overlay, &move_executor).unwrap();
+
+        assert_eq!(record.status, ExecutionStatus::Success);
+        assert_eq!(record.gas_used, ANCHOR_GAS);
+        let anchor_change = record
+            .state_changes
+            .iter()
+            .find(|change| change.account == AccountAddress([0u8; 32]))
+            .unwrap();
+        let anchor_entry: AnchorStateEntry =
+            bcs::from_bytes(anchor_change.value.as_ref().unwrap()).unwrap();
+        assert_eq!(anchor_entry.anchor_digest, anchor_digest);
+        assert_eq!(anchor_entry.batch_seq, 42);
+        assert_eq!(anchor_entry.record_count, 3);
+    }
+
+    #[test]
+    fn execute_htlc_claim_handles_terminal_lock_statuses() {
+        let recipient = AccountAddress([0x22; 32]);
+        for (status, expected) in [
+            (HtlcStatus::Claimed, ExecutionStatus::HtlcAlreadyClaimed),
+            (HtlcStatus::Refunded, ExecutionStatus::HtlcAlreadyRefunded),
+        ] {
+            let mut state = MemState::new();
+            let lock_digest = Blake3Digest([status as u8 + 1; 32]);
+            let record = make_lock_record(
+                lock_digest,
+                AccountAddress([0x11; 32]),
+                recipient,
+                status,
+                EpochNumber(10),
+                compute_lock_hash(b"secret"),
+            );
+            let key = htlc_state_key(&lock_digest);
+            state.set_raw(
+                HTLC_SYSTEM_ACCOUNT,
+                &key.key,
+                bcs::to_bytes(&record).unwrap(),
+            );
+            let overlay = MvOverlay::new(&state);
+
+            let ctx = HtlcExecContext {
+                tx_index: 0,
+                overlay: &overlay,
+                read_set: HashMap::new(),
+                write_set: HashMap::new(),
+                state_changes: Vec::new(),
+            };
+            let result = execute_htlc_claim(ctx, lock_digest, b"secret").unwrap();
+            assert_eq!(result.status, expected);
+        }
+    }
+
+    #[test]
+    fn execute_htlc_claim_success_credits_recipient_and_marks_lock_claimed() {
+        let sender = AccountAddress([0x11; 32]);
+        let recipient = AccountAddress([0x22; 32]);
+        let preimage = b"secret-preimage";
+        let lock_digest = Blake3Digest([0x55; 32]);
+        let record = make_lock_record(
+            lock_digest,
+            sender,
+            recipient,
+            HtlcStatus::Pending,
+            EpochNumber(10),
+            compute_lock_hash(preimage),
+        );
+
+        let mut state = MemState::new();
+        state.set_u64(recipient, b"balance", 5);
+        let key = htlc_state_key(&lock_digest);
+        state.set_raw(
+            HTLC_SYSTEM_ACCOUNT,
+            &key.key,
+            bcs::to_bytes(&record).unwrap(),
+        );
+        let overlay = MvOverlay::new(&state);
+
+        let ctx = HtlcExecContext {
+            tx_index: 0,
+            overlay: &overlay,
+            read_set: HashMap::new(),
+            write_set: HashMap::new(),
+            state_changes: Vec::new(),
+        };
+        let result = execute_htlc_claim(ctx, lock_digest, preimage).unwrap();
+
+        assert_eq!(result.status, ExecutionStatus::Success);
+        assert_eq!(result.gas_used, HTLC_CLAIM_GAS);
+        let recipient_change = result
+            .state_changes
+            .iter()
+            .find(|change| change.account == recipient)
+            .unwrap();
+        assert_eq!(parse_balance(&recipient_change.value), 30);
+        let lock_change = result
+            .state_changes
+            .iter()
+            .find(|change| change.account == HTLC_SYSTEM_ACCOUNT)
+            .unwrap();
+        let updated: HtlcLockRecord = bcs::from_bytes(lock_change.value.as_ref().unwrap()).unwrap();
+        assert_eq!(updated.status, HtlcStatus::Claimed);
+    }
+
+    #[test]
+    fn execute_htlc_refund_rejects_unauthorized_and_too_early_paths() {
+        let sender = AccountAddress([0x11; 32]);
+        let stranger = AccountAddress([0x33; 32]);
+        let recipient = AccountAddress([0x22; 32]);
+
+        let lock_digest = Blake3Digest([0x66; 32]);
+        let record = make_lock_record(
+            lock_digest,
+            sender,
+            recipient,
+            HtlcStatus::Pending,
+            EpochNumber(10),
+            compute_lock_hash(b"refund"),
+        );
+        let key = htlc_state_key(&lock_digest);
+
+        let mut unauthorized_state = MemState::new();
+        unauthorized_state.set_raw(
+            HTLC_SYSTEM_ACCOUNT,
+            &key.key,
+            bcs::to_bytes(&record).unwrap(),
+        );
+        let unauthorized_overlay = MvOverlay::new(&unauthorized_state);
+        let unauthorized_ctx = HtlcExecContext {
+            tx_index: 0,
+            overlay: &unauthorized_overlay,
+            read_set: HashMap::new(),
+            write_set: HashMap::new(),
+            state_changes: Vec::new(),
+        };
+        let unauthorized = execute_htlc_refund(unauthorized_ctx, stranger, lock_digest).unwrap();
+        assert!(matches!(
+            unauthorized.status,
+            ExecutionStatus::MoveAbort { ref location, code }
+                if location == "nexus::htlc_refund" && code == 2
+        ));
+
+        let mut early_state = MemState::new();
+        early_state.set_raw(
+            HTLC_SYSTEM_ACCOUNT,
+            &key.key,
+            bcs::to_bytes(&record).unwrap(),
+        );
+        early_state.set_u64(AccountAddress([0u8; 32]), b"current_epoch", 9);
+        let early_overlay = MvOverlay::new(&early_state);
+        let early_ctx = HtlcExecContext {
+            tx_index: 0,
+            overlay: &early_overlay,
+            read_set: HashMap::new(),
+            write_set: HashMap::new(),
+            state_changes: Vec::new(),
+        };
+        let early = execute_htlc_refund(early_ctx, sender, lock_digest).unwrap();
+        assert_eq!(early.status, ExecutionStatus::HtlcRefundTooEarly);
+    }
+
+    #[test]
+    fn parse_balance_tolerates_missing_or_malformed_bytes() {
+        assert_eq!(parse_balance(&None), 0);
+        assert_eq!(parse_balance(&Some(vec![])), 0);
+        assert_eq!(parse_balance(&Some(vec![1, 2, 3])), 0);
+        assert_eq!(parse_balance(&Some(99u64.to_le_bytes().to_vec())), 99);
+    }
+
+    // ── validate_tx_preexec coverage (Task 1) ───────────────────────
+
+    use nexus_primitives::{ContractAddress, TokenId};
+
+    #[test]
+    fn validate_tx_preexec_passes_valid_transaction() {
+        let sender = TestAccount::random();
+        let tx = make_signed_tx(
+            &sender,
+            TransactionPayload::Transfer {
+                recipient: AccountAddress([0x22; 32]),
+                amount: Amount(1),
+                token: TokenId::Native,
+            },
+            0,
+        );
+        assert!(validate_tx_preexec(&tx, EpochNumber(0), 1).is_none());
+    }
+
+    #[test]
+    fn validate_tx_preexec_rejects_digest_mismatch() {
+        let sender = TestAccount::random();
+        let mut tx = make_signed_tx(
+            &sender,
+            TransactionPayload::Transfer {
+                recipient: AccountAddress([0x22; 32]),
+                amount: Amount(1),
+                token: TokenId::Native,
+            },
+            0,
+        );
+        // Corrupt the stored digest so it no longer matches the body.
+        tx.digest = Blake3Digest([0xFF; 32]);
+        let result = validate_tx_preexec(&tx, EpochNumber(0), 1).unwrap();
+        assert_eq!(result.status, ExecutionStatus::InvalidSignature);
+    }
+
+    #[test]
+    fn validate_tx_preexec_rejects_bad_signature() {
+        let sender = TestAccount::random();
+        let other = TestAccount::random();
+        let mut tx = make_signed_tx(
+            &sender,
+            TransactionPayload::Transfer {
+                recipient: AccountAddress([0x22; 32]),
+                amount: Amount(1),
+                token: TokenId::Native,
+            },
+            0,
+        );
+        // Replace with a signature from a different key — fails verify against sender_pk.
+        tx.signature = DilithiumSigner::sign(&other.sk, TX_DOMAIN, tx.digest.as_bytes());
+        let result = validate_tx_preexec(&tx, EpochNumber(0), 1).unwrap();
+        assert_eq!(result.status, ExecutionStatus::InvalidSignature);
+    }
+
+    #[test]
+    fn validate_tx_preexec_rejects_sender_pubkey_mismatch() {
+        let sender = TestAccount::random();
+        // Build a body where body.sender is NOT the address derived from sender.pk.
+        let body = TransactionBody {
+            sender: AccountAddress([0xFE; 32]), // address ≠ sender.address
+            sequence_number: 0,
+            expiry_epoch: EpochNumber(100),
+            gas_limit: 50_000,
+            gas_price: 1,
+            target_shard: Some(ShardId(0)),
+            payload: TransactionPayload::Transfer {
+                recipient: AccountAddress([0x22; 32]),
+                amount: Amount(1),
+                token: TokenId::Native,
+            },
+            chain_id: 1,
+        };
+        let digest = compute_tx_digest(&body).unwrap();
+        let signature = DilithiumSigner::sign(&sender.sk, TX_DOMAIN, digest.as_bytes());
+        // sender_pk derives to sender.address ≠ [0xFE; 32] → SenderMismatch.
+        let tx = SignedTransaction {
+            body,
+            signature,
+            sender_pk: sender.pk.clone(),
+            digest,
+        };
+        let result = validate_tx_preexec(&tx, EpochNumber(0), 1).unwrap();
+        assert_eq!(result.status, ExecutionStatus::SenderMismatch);
+    }
+
+    #[test]
+    fn validate_tx_preexec_rejects_expired_transaction() {
+        let sender = TestAccount::random();
+        // make_signed_tx sets expiry_epoch = EpochNumber(100).
+        let tx = make_signed_tx(
+            &sender,
+            TransactionPayload::Transfer {
+                recipient: AccountAddress([0x22; 32]),
+                amount: Amount(1),
+                token: TokenId::Native,
+            },
+            0,
+        );
+        // current_epoch = 101 > expiry_epoch = 100 → Expired.
+        let result = validate_tx_preexec(&tx, EpochNumber(101), 1).unwrap();
+        assert_eq!(result.status, ExecutionStatus::Expired);
+    }
+
+    #[test]
+    fn validate_tx_preexec_rejects_wrong_chain_id() {
+        let sender = TestAccount::random();
+        // make_signed_tx uses chain_id = 1 in the body.
+        let tx = make_signed_tx(
+            &sender,
+            TransactionPayload::Transfer {
+                recipient: AccountAddress([0x22; 32]),
+                amount: Amount(1),
+                token: TokenId::Native,
+            },
+            0,
+        );
+        // Validate against chain_id = 999 → ChainIdMismatch.
+        let result = validate_tx_preexec(&tx, EpochNumber(0), 999).unwrap();
+        assert_eq!(result.status, ExecutionStatus::ChainIdMismatch);
+    }
+
+    // ── MoveCall / MoveUpgrade / HtlcLock coverage (Task 2) ─────────
+
+    /// A mock VM that records calls to execute_function in addition to
+    /// publish_modules and execute_script.
+    struct MockVmWithExecute {
+        calls: Arc<Mutex<Vec<&'static str>>>,
+        execute_output: VmOutput,
+        publish_output: VmOutput,
+    }
+
+    impl MockVmWithExecute {
+        fn success(calls: Arc<Mutex<Vec<&'static str>>>) -> Self {
+            let mut write_set = HashMap::new();
+            write_set.insert(
+                (AccountAddress([0xCC; 32]), b"vm_result".to_vec()),
+                Some(vec![42]),
+            );
+            let state_changes = vec![StateChange {
+                account: AccountAddress([0xCC; 32]),
+                key: b"vm_result".to_vec(),
+                value: Some(vec![42]),
+            }];
+            Self {
+                calls,
+                execute_output: VmOutput {
+                    status: ExecutionStatus::Success,
+                    gas_used: 500,
+                    state_changes,
+                    write_set,
+                },
+                publish_output: VmOutput {
+                    status: ExecutionStatus::Success,
+                    gas_used: 1_500,
+                    state_changes: Vec::new(),
+                    write_set: HashMap::new(),
+                },
+            }
+        }
+    }
+
+    impl MoveVm for MockVmWithExecute {
+        fn execute_function(
+            &self,
+            _state: &NexusStateView<'_>,
+            _sender: AccountAddress,
+            _contract: AccountAddress,
+            _function: &str,
+            _type_args: &[Vec<u8>],
+            _args: &[Vec<u8>],
+            _gas_limit: u64,
+        ) -> ExecutionResult<VmOutput> {
+            self.calls.lock().unwrap().push("execute_function");
+            Ok(self.execute_output.clone())
+        }
+
+        fn publish_modules(
+            &self,
+            _state: &NexusStateView<'_>,
+            _sender: AccountAddress,
+            _modules: &[Vec<u8>],
+            _gas_limit: u64,
+        ) -> ExecutionResult<VmOutput> {
+            self.calls.lock().unwrap().push("publish_modules");
+            Ok(self.publish_output.clone())
+        }
+
+        fn execute_script(
+            &self,
+            _state: &NexusStateView<'_>,
+            _sender: AccountAddress,
+            _bytecode: &[u8],
+            _type_args: &[Vec<u8>],
+            _args: &[Vec<u8>],
+            _gas_limit: u64,
+        ) -> ExecutionResult<VmOutput> {
+            self.calls.lock().unwrap().push("execute_script");
+            Ok(self.publish_output.clone())
+        }
+    }
+
+    #[test]
+    fn execute_single_tx_move_call_delegates_to_vm_and_merges_write_set() {
+        let sender = TestAccount::random();
+        let mut state = MemState::new();
+        state.set_u64(sender.address, SEQUENCE_NUMBER_KEY, 0);
+        let overlay = MvOverlay::new(&state);
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let move_executor = MoveExecutor::with_vm(
+            Box::new(MockVmWithExecute::success(calls.clone())),
+            VmConfig::default(),
+        );
+        let tx = make_signed_tx(
+            &sender,
+            TransactionPayload::MoveCall {
+                contract: ContractAddress([0xD0; 32]),
+                function: "counter::increment".to_string(),
+                type_args: vec![],
+                args: vec![],
+            },
+            0,
+        );
+
+        let record = execute_single_tx(&tx, 0, &overlay, &move_executor).unwrap();
+
+        assert_eq!(record.status, ExecutionStatus::Success);
+        assert_eq!(record.gas_used, 500);
+        assert_eq!(*calls.lock().unwrap(), vec!["execute_function"]);
+        // Sequence number increment is in the write-set.
+        assert!(record.write_set.contains_key(&StateKey {
+            account: sender.address,
+            key: SEQUENCE_NUMBER_KEY.to_vec(),
+        }));
+        // VM write-set entry is merged in.
+        assert!(record.write_set.contains_key(&StateKey {
+            account: AccountAddress([0xCC; 32]),
+            key: b"vm_result".to_vec(),
+        }));
+    }
+
+    #[test]
+    fn execute_single_tx_move_upgrade_calls_publish_under_contract_address() {
+        let sender = TestAccount::random();
+        let contract = ContractAddress([0xE0; 32]);
+        let mut state = MemState::new();
+        state.set_u64(sender.address, SEQUENCE_NUMBER_KEY, 0);
+        let overlay = MvOverlay::new(&state);
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let move_executor = MoveExecutor::with_vm(
+            Box::new(MockVmWithExecute::success(calls.clone())),
+            VmConfig::default(),
+        );
+        let tx = make_signed_tx(
+            &sender,
+            TransactionPayload::MoveUpgrade {
+                contract,
+                bytecode_modules: vec![vec![0xDE, 0xAD]],
+            },
+            0,
+        );
+
+        let record = execute_single_tx(&tx, 0, &overlay, &move_executor).unwrap();
+
+        assert_eq!(record.status, ExecutionStatus::Success);
+        assert_eq!(record.gas_used, 1_500);
+        assert_eq!(*calls.lock().unwrap(), vec!["publish_modules"]);
+    }
+
+    #[test]
+    fn execute_htlc_lock_debits_sender_and_writes_lock_record() {
+        let sender = TestAccount::random();
+        let recipient = AccountAddress([0xBB; 32]);
+        let mut state = MemState::new();
+        state.set_u64(sender.address, SEQUENCE_NUMBER_KEY, 0);
+        // Give sender enough balance: amount(100) + gas_limit(50_000) * gas_price(1) = 50_100.
+        state.set_u64(sender.address, b"balance", 100_000);
+        let overlay = MvOverlay::new(&state);
+        let move_executor = MoveExecutor::with_builtin(VmConfig::default());
+        let lock_hash = Blake3Digest([0xAA; 32]);
+        let tx = make_signed_tx(
+            &sender,
+            TransactionPayload::HtlcLock {
+                recipient,
+                amount: Amount(100),
+                target_shard: ShardId(1),
+                lock_hash,
+                timeout_epoch: EpochNumber(200),
+            },
+            0,
+        );
+
+        let record = execute_single_tx(&tx, 0, &overlay, &move_executor).unwrap();
+
+        assert_eq!(record.status, ExecutionStatus::Success);
+        assert_eq!(record.gas_used, HTLC_LOCK_GAS);
+
+        // Sender balance should be debited.
+        let sender_balance_change = record
+            .state_changes
+            .iter()
+            .find(|c| c.account == sender.address && c.key == b"balance")
+            .expect("sender balance state change missing");
+        // new_balance = 100_000 - (100 + 50_000) = 49_900
+        assert_eq!(parse_balance(&sender_balance_change.value), 49_900);
+
+        // Lock record should be written to HTLC_SYSTEM_ACCOUNT.
+        let htlc_change = record
+            .state_changes
+            .iter()
+            .find(|c| c.account == HTLC_SYSTEM_ACCOUNT)
+            .expect("htlc lock record state change missing");
+        let lock_record: HtlcLockRecord =
+            bcs::from_bytes(htlc_change.value.as_ref().unwrap()).unwrap();
+        assert_eq!(lock_record.sender, sender.address);
+        assert_eq!(lock_record.recipient, recipient);
+        assert_eq!(lock_record.amount, Amount(100));
+        assert_eq!(lock_record.lock_hash, lock_hash);
+        assert_eq!(lock_record.status, HtlcStatus::Pending);
+    }
+
+    #[test]
+    fn execute_htlc_lock_insufficient_balance_returns_abort() {
+        let sender = TestAccount::random();
+        let mut state = MemState::new();
+        state.set_u64(sender.address, SEQUENCE_NUMBER_KEY, 0);
+        // Zero balance — cannot cover amount + gas.
+        let overlay = MvOverlay::new(&state);
+        let move_executor = MoveExecutor::with_builtin(VmConfig::default());
+        let tx = make_signed_tx(
+            &sender,
+            TransactionPayload::HtlcLock {
+                recipient: AccountAddress([0xBB; 32]),
+                amount: Amount(100),
+                target_shard: ShardId(1),
+                lock_hash: Blake3Digest([0xAA; 32]),
+                timeout_epoch: EpochNumber(200),
+            },
+            0,
+        );
+
+        let record = execute_single_tx(&tx, 0, &overlay, &move_executor).unwrap();
+
+        assert!(matches!(
+            record.status,
+            ExecutionStatus::MoveAbort { code: 1, ref location }
+                if location == "nexus::htlc_lock"
+        ));
+        assert_eq!(record.gas_used, HTLC_LOCK_GAS);
+        // No HTLC state change should be written.
+        assert!(!record
+            .state_changes
+            .iter()
+            .any(|c| c.account == HTLC_SYSTEM_ACCOUNT));
+    }
+}
+
 // ── Gas calibration tests (D-4) ─────────────────────────────────────────
 
 #[cfg(test)]

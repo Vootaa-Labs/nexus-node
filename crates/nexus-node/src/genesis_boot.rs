@@ -347,6 +347,28 @@ mod tests {
     }
 
     #[test]
+    fn is_genesis_applied_returns_false_on_empty_store() {
+        let store = MemoryStore::new();
+        assert!(!is_genesis_applied(&store).unwrap());
+    }
+
+    #[test]
+    fn is_genesis_applied_returns_true_after_boot() {
+        let genesis = GenesisConfig::for_testing();
+        let dir = std::env::temp_dir().join("nexus-genesis-applied-check");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("genesis.json");
+        let json = serde_json::to_string_pretty(&genesis).unwrap();
+        std::fs::write(&path, json).unwrap();
+
+        let store = MemoryStore::new();
+        boot_from_genesis(&path, &store, ShardId(0)).unwrap();
+
+        assert!(is_genesis_applied(&store).unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn genesis_seeds_staking_records() {
         use crate::snapshot_provider::build_staking_resource_key;
         use crate::validator_identity::address_from_validator_index;

@@ -84,3 +84,40 @@ pub fn spawn_cleanup_task<S: StateStorage + Send + Sync + 'static>(
         }
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cleanup_config_defaults_are_sensible() {
+        let cfg = CleanupConfig::default();
+        // Interval: 1 hour
+        assert_eq!(cfg.interval_ms, 60 * 60 * 1_000);
+        // Session TTL: 24 hours
+        assert_eq!(cfg.session_ttl_ms, 24 * 60 * 60 * 1_000);
+        // Provenance retention: 30 days
+        assert_eq!(cfg.provenance_retention_ms, 30 * 24 * 60 * 60 * 1_000);
+    }
+
+    #[test]
+    fn cleanup_config_custom_values() {
+        let cfg = CleanupConfig {
+            interval_ms: 5_000,
+            session_ttl_ms: 60_000,
+            provenance_retention_ms: 0, // disabled
+        };
+        assert_eq!(cfg.interval_ms, 5_000);
+        assert_eq!(cfg.session_ttl_ms, 60_000);
+        assert_eq!(cfg.provenance_retention_ms, 0);
+    }
+
+    #[test]
+    fn cleanup_config_clone_is_equal() {
+        let cfg = CleanupConfig::default();
+        let cloned = cfg.clone();
+        assert_eq!(cfg.interval_ms, cloned.interval_ms);
+        assert_eq!(cfg.session_ttl_ms, cloned.session_ttl_ms);
+        assert_eq!(cfg.provenance_retention_ms, cloned.provenance_retention_ms);
+    }
+}

@@ -243,6 +243,78 @@ impl MoveExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+
+    use crate::traits::StateView;
+    use nexus_primitives::AccountAddress;
+
+    struct EmptyState;
+
+    impl StateView for EmptyState {
+        fn get(&self, _account: &AccountAddress, _key: &[u8]) -> ExecutionResult<Option<Vec<u8>>> {
+            Ok(None)
+        }
+    }
+
+    struct MockVm {
+        calls: Arc<Mutex<Vec<&'static str>>>,
+    }
+
+    impl MockVm {
+        fn new(calls: Arc<Mutex<Vec<&'static str>>>) -> Self {
+            Self { calls }
+        }
+
+        fn output(gas_used: u64) -> VmOutput {
+            VmOutput {
+                status: ExecutionStatus::Success,
+                gas_used,
+                state_changes: Vec::new(),
+                write_set: HashMap::new(),
+            }
+        }
+    }
+
+    impl MoveVm for MockVm {
+        fn execute_function(
+            &self,
+            _state: &NexusStateView<'_>,
+            _sender: AccountAddress,
+            _contract: AccountAddress,
+            _function: &str,
+            _type_args: &[Vec<u8>],
+            _args: &[Vec<u8>],
+            _gas_limit: u64,
+        ) -> ExecutionResult<VmOutput> {
+            self.calls.lock().unwrap().push("execute_function");
+            Ok(Self::output(11))
+        }
+
+        fn publish_modules(
+            &self,
+            _state: &NexusStateView<'_>,
+            _sender: AccountAddress,
+            _modules: &[Vec<u8>],
+            _gas_limit: u64,
+        ) -> ExecutionResult<VmOutput> {
+            self.calls.lock().unwrap().push("publish_modules");
+            Ok(Self::output(22))
+        }
+
+        fn execute_script(
+            &self,
+            _state: &NexusStateView<'_>,
+            _sender: AccountAddress,
+            _bytecode: &[u8],
+            _type_args: &[Vec<u8>],
+            _args: &[Vec<u8>],
+            _gas_limit: u64,
+        ) -> ExecutionResult<VmOutput> {
+            self.calls.lock().unwrap().push("execute_script");
+            Ok(Self::output(33))
+        }
+    }
 
     #[test]
     fn move_vm_trait_is_object_safe() {
@@ -255,6 +327,50 @@ mod tests {
         assert_eq!(
             exec.config().max_binary_size,
             VmConfig::default().max_binary_size
+        );
+    }
+
+    #[test]
+    fn move_executor_with_builtin_preserves_config() {
+        let config = VmConfig {
+            max_binary_size: 1234,
+            call_base_gas: 44,
+            publish_base_gas: 55,
+            publish_per_byte_gas: 2,
+            read_per_byte_gas: 3,
+            write_per_byte_gas: 4,
+        };
+        let exec = MoveExecutor::with_builtin(config.clone());
+
+        assert_eq!(exec.config().max_binary_size, config.max_binary_size);
+        assert_eq!(exec.config().publish_base_gas, config.publish_base_gas);
+    }
+
+    #[test]
+    fn move_executor_delegates_to_custom_vm() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let exec = MoveExecutor::with_vm(Box::new(MockVm::new(calls.clone())), VmConfig::default());
+        let state = EmptyState;
+        let view = NexusStateView::new(&state);
+        let sender = AccountAddress([0x11; 32]);
+        let contract = AccountAddress([0x22; 32]);
+
+        let function_output = exec
+            .execute_function(&view, sender, contract, "counter::get_count", &[], &[], 100)
+            .unwrap();
+        let publish_output = exec
+            .publish_modules(&view, sender, &[vec![1, 2, 3]], 200)
+            .unwrap();
+        let script_output = exec
+            .execute_script(&view, sender, &[4, 5, 6], &[], &[], 300)
+            .unwrap();
+
+        assert_eq!(function_output.gas_used, 11);
+        assert_eq!(publish_output.gas_used, 22);
+        assert_eq!(script_output.gas_used, 33);
+        assert_eq!(
+            *calls.lock().unwrap(),
+            vec!["execute_function", "publish_modules", "execute_script"]
         );
     }
 }

@@ -471,6 +471,7 @@ mod tests {
     use super::super::resources::resource_key;
     use super::super::verifier::make_test_module;
     use super::*;
+    use crate::error::ExecutionError;
     use crate::traits::StateView;
     use std::collections::HashMap as StdHashMap;
 
@@ -705,5 +706,214 @@ mod tests {
             result.status,
             ExecutionStatus::MoveAbort { code: 100, .. }
         ));
+    }
+
+    // ── Additional branch-coverage tests ──────────────────────────────────
+
+    /// A [`StateView`] that fails on any resource-key storage read while
+    /// delegating module-code / ABI reads to a real [`MemState`].
+    struct ResourceFailState {
+        base: MemState,
+    }
+
+    impl StateView for ResourceFailState {
+        fn get(&self, account: &AccountAddress, key: &[u8]) -> ExecutionResult<Option<Vec<u8>>> {
+            if key.starts_with(b"resource::") {
+                return Err(ExecutionError::Storage("injected read failure".into()));
+            }
+            self.base.get(account, key)
+        }
+    }
+
+    #[test]
+    fn execute_function_gas_below_base_returns_outofgas() {
+        let vm = make_vm();
+        let state = MemState::new();
+        let view = NexusStateView::new(&state);
+        // for_testing() call_base = 1_000; pass 500 → immediate OutOfGas
+        let result = vm
+            .execute_function(&view, addr(1), addr(2), "anything", &[], &[], 500)
+            .unwrap();
+        assert_eq!(result.status, ExecutionStatus::OutOfGas);
+        assert_eq!(result.gas_used, 500);
+    }
+
+    #[test]
+    fn execute_script_is_not_supported() {
+        let vm = make_vm();
+        let state = MemState::new();
+        let view = NexusStateView::new(&state);
+        let result = vm
+            .execute_script(&view, addr(1), &[0xCA, 0xFE], &[], &[], 100_000)
+            .unwrap();
+        assert!(matches!(
+            result.status,
+            ExecutionStatus::MoveAbort { code: 255, .. }
+        ));
+        assert!(result.gas_used > 0);
+    }
+
+    #[test]
+    fn execute_getter_reads_u64_resource() {
+        let vm = make_vm();
+        let mut state = MemState::new();
+        let abi = vec![FunctionAbi {
+            name: "get_count".into(),
+            params: vec![],
+            returns: Some(MoveType::U64),
+            is_entry: false,
+        }];
+        let contract = setup_contract_with_abi(&mut state, addr(0xA0), &abi);
+
+        // Pre-populate resource so the getter has something to read.
+        state.set(
+            contract,
+            &resource_key("get_count::State"),
+            encode_u64_arg(42),
+        );
+
+        let view = NexusStateView::new(&state);
+        let result = vm
+            .execute_function(&view, addr(1), contract, "get_count", &[], &[], 100_000)
+            .unwrap();
+        assert_eq!(result.status, ExecutionStatus::Success);
+    }
+
+    #[test]
+    fn execute_generic_entry_stores_payload() {
+        let vm = make_vm();
+        let mut state = MemState::new();
+        // Bool param + entry=true → generic entry catch-all branch.
+        let abi = vec![FunctionAbi {
+            name: "set_flag".into(),
+            params: vec![MoveType::Bool],
+            returns: None,
+            is_entry: true,
+        }];
+        let contract = setup_contract_with_abi(&mut state, addr(0xB0), &abi);
+
+        let view = NexusStateView::new(&state);
+        let result = vm
+            .execute_function(
+                &view,
+                addr(1),
+                contract,
+                "set_flag",
+                &[],
+                &[vec![1u8]], // BCS-encoded bool = true
+                100_000,
+            )
+            .unwrap();
+        assert_eq!(result.status, ExecutionStatus::Success);
+        assert!(
+            !result.state_changes.is_empty(),
+            "generic entry must produce a state change"
+        );
+    }
+
+    #[test]
+    fn execute_generic_read_returns_resource_bytes() {
+        let vm = make_vm();
+        let mut state = MemState::new();
+        // Bool param + is_entry=false → generic read catch-all (not the U64 getter).
+        let abi = vec![FunctionAbi {
+            name: "read_flag".into(),
+            params: vec![MoveType::Bool],
+            returns: None,
+            is_entry: false,
+        }];
+        let contract = setup_contract_with_abi(&mut state, addr(0xC0), &abi);
+        // Pre-populate so the read returns Some(bytes).
+        state.set(contract, &resource_key("read_flag::State"), vec![1u8]);
+
+        let view = NexusStateView::new(&state);
+        let result = vm
+            .execute_function(
+                &view,
+                addr(1),
+                contract,
+                "read_flag",
+                &[],
+                &[vec![1u8]],
+                100_000,
+            )
+            .unwrap();
+        assert_eq!(result.status, ExecutionStatus::Success);
+    }
+
+    #[test]
+    fn execute_function_corrupt_abi_returns_error() {
+        let vm = make_vm();
+        let mut state = MemState::new();
+        state.set(addr(0xD0), MODULE_CODE_KEY, vec![0xCA, 0xFE]);
+        // Garbage bytes are not valid BCS for Vec<FunctionAbi>.
+        state.set(addr(0xD0), MODULE_ABI_KEY, vec![0xFF, 0xFF, 0xFF]);
+
+        let view = NexusStateView::new(&state);
+        let result = vm.execute_function(&view, addr(1), addr(0xD0), "anything", &[], &[], 50_000);
+        assert!(matches!(
+            result,
+            Err(ExecutionError::BytecodeVerification { .. })
+        ));
+    }
+
+    #[test]
+    fn execute_corrupt_resource_bytes_returns_type_mismatch() {
+        let vm = make_vm();
+        let mut state = MemState::new();
+        let abi = vec![FunctionAbi {
+            name: "increment".into(),
+            params: vec![],
+            returns: None,
+            is_entry: true,
+        }];
+        let contract = setup_contract_with_abi(&mut state, addr(0xE0), &abi);
+
+        // 3 bytes are not a valid u64; read_u64_resource must fail with ArgDecode.
+        state.set(contract, &resource_key("increment::State"), vec![1, 2, 3]);
+
+        let view = NexusStateView::new(&state);
+        let result = vm.execute_function(&view, addr(1), contract, "increment", &[], &[], 100_000);
+        assert!(matches!(result, Err(ExecutionError::TypeMismatch { .. })));
+    }
+
+    #[test]
+    fn publish_modules_insufficient_gas_returns_outofgas() {
+        let vm = make_vm();
+        let state = MemState::new();
+        let view = NexusStateView::new(&state);
+        let modules = vec![make_test_module(16)];
+        // for_testing() publish_base = 2_000; gas_limit = 1 forces OOG in
+        // ModulePublisher, which triggers the early-return path in publish_modules.
+        let result = vm.publish_modules(&view, addr(0xAA), &modules, 1).unwrap();
+        assert_eq!(result.status, ExecutionStatus::OutOfGas);
+    }
+
+    #[test]
+    fn dispatch_state_read_error_propagates() {
+        let vm = make_vm();
+        let mut base = MemState::new();
+        // Build a contract whose ABI uses the generic read path.
+        let abi = vec![FunctionAbi {
+            name: "read_flag".into(),
+            params: vec![MoveType::Bool],
+            returns: None,
+            is_entry: false,
+        }];
+        let contract = setup_contract_with_abi(&mut base, addr(0xC0), &abi);
+
+        // Wrap in a state that panics on resource-key reads.
+        let fail_state = ResourceFailState { base };
+        let view = NexusStateView::new(&fail_state);
+        let result = vm.execute_function(
+            &view,
+            addr(1),
+            contract,
+            "read_flag",
+            &[],
+            &[vec![1u8]],
+            100_000,
+        );
+        assert!(matches!(result, Err(ExecutionError::Storage(_))));
     }
 }

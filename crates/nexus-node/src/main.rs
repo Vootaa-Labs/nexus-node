@@ -234,11 +234,8 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
         );
 
         readiness.genesis_handle().set_ready();
-        let outcome = if genesis_already_applied {
-            nexus_node::startup_report::GenesisOutcome::AlreadyApplied
-        } else {
-            nexus_node::startup_report::GenesisOutcome::Applied
-        };
+        let outcome =
+            nexus_node::startup_report::genesis_outcome_from_boot(genesis_already_applied);
         (boot.committee, boot.num_shards, boot.chain_id, outcome)
     } else {
         // dev_mode guard enforced in main(); reaching here means dev_mode is true.
@@ -679,11 +676,9 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
             bootstrap = disc_result.bootstrap_initiated,
             "validator discovery complete"
         );
-        Some(nexus_node::startup_report::DiscoveryOutcome {
-            validators_seeded: disc_result.validators_seeded,
-            boot_nodes_added: disc_result.boot_nodes_added,
-            bootstrap_initiated: disc_result.bootstrap_initiated,
-        })
+        Some(nexus_node::startup_report::DiscoveryOutcome::from(
+            disc_result,
+        ))
     } else {
         None
     };
@@ -823,25 +818,26 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
     let _net_handle = net_handle;
 
     // ── Startup report ──────────────────────────────────────────────────
-    let startup_report = nexus_node::startup_report::StartupReport {
-        version: env!("CARGO_PKG_VERSION"),
-        dev_mode: config.dev_mode,
-        chain_id: chain_id_str,
-        genesis: genesis_outcome,
-        committee_size,
-        local_validator_index: local_validator_index.0,
-        num_shards,
-        storage_path: config.storage.rocksdb_path.display().to_string(),
-        session_recovery,
-        provenance_recovery,
-        network_discovery,
-        readiness_status: readiness.status().as_str(),
-        proof_backend: nexus_node::startup_report::ProofBackendStatus {
-            enabled: true,
-            rpc_registered: true,
-            execution_bridge_connected: true,
+    let startup_report = nexus_node::startup_report::StartupReport::from_inputs(
+        nexus_node::startup_report::StartupReportInputs {
+            dev_mode: config.dev_mode,
+            chain_id: chain_id_str,
+            genesis: genesis_outcome,
+            committee_size,
+            local_validator_index: local_validator_index.0,
+            num_shards,
+            storage_path: config.storage.rocksdb_path.display().to_string(),
+            session_recovery,
+            provenance_recovery,
+            network_discovery,
+            readiness_status: readiness.status().as_str(),
+            proof_backend: nexus_node::startup_report::ProofBackendStatus {
+                enabled: true,
+                rpc_registered: true,
+                execution_bridge_connected: true,
+            },
         },
-    };
+    );
     startup_report.log();
 
     tracing::info!("all subsystems wired — starting RPC server");

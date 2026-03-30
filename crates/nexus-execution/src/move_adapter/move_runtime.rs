@@ -656,6 +656,61 @@ fn changeset_to_nexus(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::move_adapter::stdlib;
+    use crate::traits::StateView;
+    use nexus_move_runtime::upstream::move_core_types::identifier::IdentStr;
+    use std::collections::HashMap;
+    use std::sync::RwLock;
+
+    #[allow(clippy::type_complexity)]
+    struct TestState {
+        data: RwLock<HashMap<(AccountAddress, Vec<u8>), Vec<u8>>>,
+        fail_reads: bool,
+    }
+
+    impl TestState {
+        fn new() -> Self {
+            Self {
+                data: RwLock::new(HashMap::new()),
+                fail_reads: false,
+            }
+        }
+
+        fn failing() -> Self {
+            Self {
+                data: RwLock::new(HashMap::new()),
+                fail_reads: true,
+            }
+        }
+
+        fn set(&self, account: AccountAddress, key: &[u8], value: Vec<u8>) {
+            self.data
+                .write()
+                .unwrap()
+                .insert((account, key.to_vec()), value);
+        }
+    }
+
+    impl StateView for TestState {
+        fn get(&self, account: &AccountAddress, key: &[u8]) -> ExecutionResult<Option<Vec<u8>>> {
+            if self.fail_reads {
+                return Err(ExecutionError::Storage("forced test read failure".into()));
+            }
+            Ok(self
+                .data
+                .read()
+                .unwrap()
+                .get(&(*account, key.to_vec()))
+                .cloned())
+        }
+    }
+
+    fn counter_deployer() -> AccountAddress {
+        let mut bytes = [0u8; 32];
+        bytes[30] = 0xCA;
+        bytes[31] = 0xFE;
+        AccountAddress(bytes)
+    }
 
     #[test]
     fn test_parse_function_name_valid() {
@@ -690,60 +745,161 @@ mod tests {
         assert!(dependency_must_exist(&external, &sender));
     }
 
+    #[test]
+    fn test_deserialize_type_args_accepts_valid_bcs() {
+        let encoded = bcs::to_bytes(&TypeTag::Bool).unwrap();
+        let decoded = deserialize_type_args(&[encoded]).unwrap();
+        assert_eq!(decoded, vec![TypeTag::Bool]);
+    }
+
+    #[test]
+    fn test_deserialize_type_args_rejects_invalid_bcs() {
+        let err = deserialize_type_args(&[vec![0xFF, 0xEE]]).unwrap_err();
+        match err {
+            ExecutionError::BytecodeVerification { reason } => {
+                assert!(reason.contains("type arg deserialization failed"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_execute_script_returns_placeholder_abort() {
+        let state = TestState::new();
+        let view = NexusStateView::new(&state);
+        let vm = MoveRuntime::new(&VmConfig::default());
+
+        let output = vm
+            .execute_script(
+                &view,
+                AccountAddress([0x44; 32]),
+                &[1, 2, 3, 4],
+                &[],
+                &[vec![5, 6, 7]],
+                10_000,
+            )
+            .unwrap();
+
+        assert!(matches!(
+            output.status,
+            ExecutionStatus::MoveAbort { ref location, code }
+                if location == "nexus::script" && code == 255
+        ));
+        assert!(output.gas_used > 0);
+        assert!(output.state_changes.is_empty());
+        assert!(output.write_set.is_empty());
+    }
+
+    #[test]
+    fn test_query_view_rejects_invalid_identifiers() {
+        let state = TestState::new();
+        let view = NexusStateView::new(&state);
+        let vm = MoveRuntime::new(&VmConfig::default());
+        let contract = counter_deployer();
+
+        let module_err = vm
+            .query_view(&view, contract, "bad-module::run", &[], &[])
+            .unwrap_err();
+        assert!(matches!(
+            module_err,
+            ExecutionError::BytecodeVerification { reason } if reason.contains("invalid module name")
+        ));
+
+        let function_err = vm
+            .query_view(&view, contract, "counter::bad-name", &[], &[])
+            .unwrap_err();
+        assert!(matches!(
+            function_err,
+            ExecutionError::BytecodeVerification { reason } if reason.contains("invalid function name")
+        ));
+    }
+
+    #[test]
+    fn test_nexus_bytes_storage_fetches_framework_and_user_modules() {
+        let state = TestState::new();
+        let contract = counter_deployer();
+        let counter_bytes = include_bytes!(
+            "../../../../contracts/examples/counter/nexus-artifact/bytecode/counter.mv"
+        );
+        state.set(contract, MODULE_CODE_KEY, counter_bytes.to_vec());
+
+        let runtime = MoveRuntime::new(&VmConfig::default());
+        let view = NexusStateView::new(&state);
+        let storage = NexusBytesStorage::new(&view, &runtime.runtime_env);
+
+        let framework_module = storage
+            .fetch_module_bytes(
+                &stdlib::framework_address(),
+                IdentStr::new("signer").unwrap(),
+            )
+            .unwrap();
+        assert!(framework_module.is_some());
+
+        let counter_module = storage
+            .fetch_module_bytes(
+                &nexus_to_move_address(&contract),
+                IdentStr::new("counter").unwrap(),
+            )
+            .unwrap();
+        assert_eq!(counter_module.unwrap().to_vec(), counter_bytes.to_vec());
+    }
+
+    #[test]
+    fn test_nexus_bytes_storage_propagates_storage_errors() {
+        let state = TestState::failing();
+        let runtime = MoveRuntime::new(&VmConfig::default());
+        let view = NexusStateView::new(&state);
+        let storage = NexusBytesStorage::new(&view, &runtime.runtime_env);
+
+        let err = storage
+            .fetch_module_bytes(
+                &nexus_to_move_address(&counter_deployer()),
+                IdentStr::new("counter").unwrap(),
+            )
+            .unwrap_err();
+        assert_eq!(err.major_status(), StatusCode::STORAGE_ERROR);
+    }
+
+    #[test]
+    fn test_resource_resolver_reads_stored_resource_bytes() {
+        let state = TestState::new();
+        let account = AccountAddress([0x55; 32]);
+        let struct_tag = StructTag {
+            address: stdlib::framework_address(),
+            module: Identifier::new("signer").unwrap(),
+            name: Identifier::new("Signer").unwrap(),
+            type_args: vec![],
+        };
+        let key = bcs::to_bytes(&struct_tag).unwrap();
+        state.set(account, &key, vec![1, 2, 3, 4]);
+
+        let runtime = MoveRuntime::new(&VmConfig::default());
+        let view = NexusStateView::new(&state);
+        let storage = NexusBytesStorage::new(&view, &runtime.runtime_env);
+
+        let (bytes, size) = storage
+            .get_resource_bytes_with_metadata_and_layout(
+                &nexus_to_move_address(&account),
+                &struct_tag,
+                &[],
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(size, 4);
+        assert_eq!(bytes.unwrap().to_vec(), vec![1, 2, 3, 4]);
+    }
+
     /// Test that the real Move VM can deploy and execute a counter module
     /// with signer-based entry functions and view queries.
     #[test]
     fn test_real_vm_counter_lifecycle() {
-        use crate::traits::StateView;
-        use std::collections::HashMap;
-        use std::sync::RwLock;
-
-        // Simple in-memory state view for testing.
-        #[allow(clippy::type_complexity)]
-        struct TestState {
-            data: RwLock<HashMap<(AccountAddress, Vec<u8>), Vec<u8>>>,
-        }
-        impl TestState {
-            fn new() -> Self {
-                Self {
-                    data: RwLock::new(HashMap::new()),
-                }
-            }
-            fn set(&self, account: AccountAddress, key: &[u8], value: Vec<u8>) {
-                self.data
-                    .write()
-                    .unwrap()
-                    .insert((account, key.to_vec()), value);
-            }
-        }
-        impl StateView for TestState {
-            fn get(
-                &self,
-                account: &AccountAddress,
-                key: &[u8],
-            ) -> ExecutionResult<Option<Vec<u8>>> {
-                Ok(self
-                    .data
-                    .read()
-                    .unwrap()
-                    .get(&(*account, key.to_vec()))
-                    .cloned())
-            }
-        }
-
         // Load the compiled counter module.
         let counter_bytes = include_bytes!(
             "../../../../contracts/examples/counter/nexus-artifact/bytecode/counter.mv"
         );
 
-        let deployer = {
-            // Must match the dev-address in contracts/examples/counter/Move.toml
-            // which is compiled into the bytecode as the module address.
-            let mut bytes = [0u8; 32];
-            bytes[30] = 0xCA;
-            bytes[31] = 0xFE;
-            AccountAddress(bytes)
-        };
+        let deployer = counter_deployer();
         let state = TestState::new();
 
         let vm = MoveRuntime::new(&VmConfig::default());
@@ -806,5 +962,137 @@ mod tests {
         // Expected: u64 = 0 (just initialized)
         let count = u64::from_le_bytes(return_values[0].clone().try_into().unwrap());
         assert_eq!(count, 0);
+    }
+
+    // ── execute_function uncovered branches (Task 7) ─────────────────
+
+    #[test]
+    fn test_execute_function_rejects_invalid_module_identifier() {
+        // "bad-module" contains a hyphen — invalid Move identifier.
+        // parse_function_name succeeds but Identifier::new("bad-module") fails.
+        let state = TestState::new();
+        let contract = counter_deployer();
+        let vm = MoveRuntime::new(&VmConfig::default());
+        let view = NexusStateView::new(&state);
+
+        let output = vm
+            .execute_function(
+                &view,
+                contract,
+                contract,
+                "bad-module::increment",
+                &[],
+                &[],
+                100_000,
+            )
+            .unwrap();
+
+        assert!(
+            matches!(output.status, ExecutionStatus::MoveAbort { code: 4001, .. }),
+            "expected MoveAbort code 4001, got {:?}",
+            output.status
+        );
+        assert!(output.gas_used > 0);
+    }
+
+    #[test]
+    fn test_execute_function_rejects_invalid_function_identifier() {
+        // "bad-func" has a hyphen — valid module name but invalid function name.
+        let state = TestState::new();
+        let contract = counter_deployer();
+        let vm = MoveRuntime::new(&VmConfig::default());
+        let view = NexusStateView::new(&state);
+
+        let output = vm
+            .execute_function(
+                &view,
+                contract,
+                contract,
+                "counter::bad-func",
+                &[],
+                &[],
+                100_000,
+            )
+            .unwrap();
+
+        assert!(
+            matches!(output.status, ExecutionStatus::MoveAbort { code: 4001, .. }),
+            "expected MoveAbort code 4001, got {:?}",
+            output.status
+        );
+    }
+
+    #[test]
+    fn test_execute_function_propagates_type_arg_deserialization_error() {
+        // Invalid BCS bytes for type args should propagate as BytecodeVerification.
+        let state = TestState::new();
+        let contract = counter_deployer();
+        let vm = MoveRuntime::new(&VmConfig::default());
+        let view = NexusStateView::new(&state);
+
+        let result = vm.execute_function(
+            &view,
+            contract,
+            contract,
+            "counter::increment",
+            &[vec![0xFF, 0xEE]], // invalid BCS
+            &[],
+            100_000,
+        );
+
+        assert!(
+            matches!(result, Err(ExecutionError::BytecodeVerification { .. })),
+            "expected BytecodeVerification error, got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_execute_function_gracefully_aborts_for_missing_module() {
+        // No module code stored at the contract address — load_function fails.
+        // The executor should return a graceful abort (not a hard error).
+        let state = TestState::new();
+        let contract = counter_deployer();
+        let vm = MoveRuntime::new(&VmConfig::default());
+        let view = NexusStateView::new(&state);
+
+        let output = vm
+            .execute_function(
+                &view,
+                contract,
+                contract,
+                "counter::increment",
+                &[],
+                &[],
+                100_000,
+            )
+            .unwrap();
+
+        // load_function failure is mapped to a graceful MoveAbort, not Err.
+        assert!(
+            matches!(output.status, ExecutionStatus::MoveAbort { .. }),
+            "expected MoveAbort for missing module, got {:?}",
+            output.status
+        );
+        assert!(output.state_changes.is_empty());
+    }
+
+    #[test]
+    fn test_nexus_bytes_storage_returns_none_for_absent_user_module() {
+        // A user module address with no code stored should return Ok(None).
+        let state = TestState::new();
+        let runtime = MoveRuntime::new(&VmConfig::default());
+        let view = NexusStateView::new(&state);
+        let storage = NexusBytesStorage::new(&view, &runtime.runtime_env);
+
+        // Non-framework address with no module stored.
+        let result = storage
+            .fetch_module_bytes(
+                &nexus_to_move_address(&counter_deployer()),
+                IdentStr::new("nonexistent").unwrap(),
+            )
+            .unwrap();
+
+        assert!(result.is_none(), "expected None for absent module");
     }
 }

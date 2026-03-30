@@ -333,9 +333,88 @@ mod tests {
     }
 
     #[test]
+    fn debug_formats_expose_only_safe_metadata() {
+        let (ek, dk) = KyberKem::generate_keypair();
+        let (ss, ct) = KyberKem::encapsulate(&ek);
+
+        let encaps_debug = format!("{:?}", ek);
+        let ciphertext_debug = format!("{:?}", ct);
+        let shared_secret_debug = format!("{:?}", ss);
+        let decaps_debug = format!("{:?}", dk);
+
+        assert!(encaps_debug.starts_with("KyberEncapsKey("));
+        assert!(encaps_debug.ends_with("…)"));
+        assert_eq!(
+            ciphertext_debug,
+            format!("KyberCiphertext({}B)", ct.as_bytes().len())
+        );
+        assert_eq!(shared_secret_debug, "KyberSharedSecret(REDACTED)");
+        assert_eq!(decaps_debug, "KyberDecapsKey(REDACTED)");
+    }
+
+    #[test]
     fn encaps_key_roundtrip() {
         let (ek, _dk) = KyberKem::generate_keypair();
         let restored = KyberEncapsKey::from_bytes(ek.as_bytes()).unwrap();
         assert_eq!(ek.as_bytes(), restored.as_bytes());
+    }
+
+    #[test]
+    fn encaps_key_from_bytes_rejects_wrong_length() {
+        let err = KyberEncapsKey::from_bytes(&[1u8; 10]).unwrap_err();
+        match err {
+            NexusCryptoError::InvalidKey { reason } => {
+                assert!(reason.contains("expected 1184"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decaps_key_from_bytes_rejects_wrong_length() {
+        let err = KyberDecapsKey::from_bytes(&[2u8; 8]).unwrap_err();
+        match err {
+            NexusCryptoError::InvalidKey { reason } => {
+                assert!(reason.contains("expected 64"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ciphertext_from_bytes_rejects_wrong_length() {
+        let err = KyberCiphertext::from_bytes(&[3u8; 7]).unwrap_err();
+        match err {
+            NexusCryptoError::InvalidSignature { reason } => {
+                assert!(reason.contains("expected 1088"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decapsulate_rejects_corrupt_ciphertext_bytes() {
+        let (_ek, dk) = KyberKem::generate_keypair();
+        let corrupt_ct = KyberCiphertext {
+            bytes: vec![0u8; 9],
+        };
+
+        let err = KyberKem::decapsulate(&dk, &corrupt_ct).unwrap_err();
+        match err {
+            NexusCryptoError::DecapsulationFailed { reason } => {
+                assert!(reason.contains("corrupt ML-KEM-768 ciphertext"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn key_material_sizes_match_declared_constants() {
+        let (ek, dk) = KyberKem::generate_keypair();
+        let (ss, ct) = KyberKem::encapsulate(&ek);
+
+        assert_eq!(dk.as_bytes().len(), 64);
+        assert_eq!(ct.as_bytes().len(), KyberKem::ciphertext_size());
+        assert_eq!(ss.as_ref().len(), KyberKem::shared_secret_size());
     }
 }

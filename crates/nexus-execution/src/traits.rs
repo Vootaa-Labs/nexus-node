@@ -101,4 +101,33 @@ mod tests {
         assert_send_sync::<dyn TransactionExecutor>();
         assert_send_sync::<dyn StateView>();
     }
+
+    /// Exercise the default `contains()` implementation through a concrete type.
+    #[test]
+    fn default_contains_delegates_to_get() {
+        use crate::ExecutionError;
+        use nexus_primitives::AccountAddress;
+
+        struct MapView(std::collections::HashMap<Vec<u8>, Vec<u8>>);
+
+        impl StateView for MapView {
+            fn get(
+                &self,
+                _account: &AccountAddress,
+                key: &[u8],
+            ) -> ExecutionResult<Option<Vec<u8>>> {
+                Ok(self.0.get(key).cloned())
+            }
+        }
+
+        let mut map = std::collections::HashMap::new();
+        map.insert(b"key1".to_vec(), b"val1".to_vec());
+        let view = MapView(map);
+        let addr = AccountAddress([0u8; 32]);
+
+        // key that exists
+        assert!(view.contains(&addr, b"key1").unwrap());
+        // key that does not exist
+        assert!(!view.contains(&addr, b"missing").unwrap());
+    }
 }

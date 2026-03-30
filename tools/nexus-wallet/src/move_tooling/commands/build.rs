@@ -111,3 +111,64 @@ fn copy_dir_all(src: &Path, dst: &Path) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn copy_dir_all_copies_flat_files() {
+        let src = TempDir::new().unwrap();
+        fs::write(src.path().join("a.txt"), b"hello").unwrap();
+        fs::write(src.path().join("b.txt"), b"world").unwrap();
+
+        let dst = TempDir::new().unwrap();
+        copy_dir_all(src.path(), dst.path()).unwrap();
+
+        assert_eq!(fs::read(dst.path().join("a.txt")).unwrap(), b"hello");
+        assert_eq!(fs::read(dst.path().join("b.txt")).unwrap(), b"world");
+    }
+
+    #[test]
+    fn copy_dir_all_creates_destination_directory() {
+        let src = TempDir::new().unwrap();
+        fs::write(src.path().join("file.mv"), b"bytecode").unwrap();
+
+        let base = TempDir::new().unwrap();
+        let dst = base.path().join("new_output").join("nested");
+        // dst does not yet exist.
+        copy_dir_all(src.path(), &dst).unwrap();
+
+        assert!(dst.join("file.mv").exists());
+    }
+
+    #[test]
+    fn copy_dir_all_recurses_into_subdirs() {
+        let src = TempDir::new().unwrap();
+        let subdir = src.path().join("subdir");
+        fs::create_dir(&subdir).unwrap();
+        fs::write(subdir.join("module.mv"), b"mv_bytes").unwrap();
+        fs::write(src.path().join("top.mv"), b"top_bytes").unwrap();
+
+        let dst = TempDir::new().unwrap();
+        copy_dir_all(src.path(), dst.path()).unwrap();
+
+        assert_eq!(fs::read(dst.path().join("top.mv")).unwrap(), b"top_bytes");
+        assert_eq!(
+            fs::read(dst.path().join("subdir").join("module.mv")).unwrap(),
+            b"mv_bytes"
+        );
+    }
+
+    #[test]
+    fn copy_dir_all_empty_source_creates_empty_dest() {
+        let src = TempDir::new().unwrap();
+        let dst = TempDir::new().unwrap();
+        copy_dir_all(src.path(), dst.path()).unwrap();
+        // Destination should exist but be empty.
+        assert!(dst.path().exists());
+        assert_eq!(fs::read_dir(dst.path()).unwrap().count(), 0);
+    }
+}

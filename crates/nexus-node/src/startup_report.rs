@@ -9,6 +9,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::validator_discovery::ValidatorDiscoveryResult;
 use serde::Serialize;
 
 /// Summary of node startup, emitted as structured JSON to the log and
@@ -86,10 +87,66 @@ pub struct ProofBackendStatus {
     pub execution_bridge_connected: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct StartupReportInputs {
+    pub dev_mode: bool,
+    pub chain_id: String,
+    pub genesis: GenesisOutcome,
+    pub committee_size: usize,
+    pub local_validator_index: u32,
+    pub num_shards: u16,
+    pub storage_path: String,
+    pub session_recovery: RecoveryOutcome,
+    pub provenance_recovery: RecoveryOutcome,
+    pub network_discovery: Option<DiscoveryOutcome>,
+    pub readiness_status: &'static str,
+    pub proof_backend: ProofBackendStatus,
+}
+
+pub fn genesis_outcome_from_boot(genesis_already_applied: bool) -> GenesisOutcome {
+    if genesis_already_applied {
+        GenesisOutcome::AlreadyApplied
+    } else {
+        GenesisOutcome::Applied
+    }
+}
+
+impl From<ValidatorDiscoveryResult> for DiscoveryOutcome {
+    fn from(value: ValidatorDiscoveryResult) -> Self {
+        Self {
+            validators_seeded: value.validators_seeded,
+            boot_nodes_added: value.boot_nodes_added,
+            bootstrap_initiated: value.bootstrap_initiated,
+        }
+    }
+}
+
 impl StartupReport {
+    pub fn from_inputs(inputs: StartupReportInputs) -> Self {
+        Self {
+            version: env!("CARGO_PKG_VERSION"),
+            dev_mode: inputs.dev_mode,
+            chain_id: inputs.chain_id,
+            genesis: inputs.genesis,
+            committee_size: inputs.committee_size,
+            local_validator_index: inputs.local_validator_index,
+            num_shards: inputs.num_shards,
+            storage_path: inputs.storage_path,
+            session_recovery: inputs.session_recovery,
+            provenance_recovery: inputs.provenance_recovery,
+            network_discovery: inputs.network_discovery,
+            readiness_status: inputs.readiness_status,
+            proof_backend: inputs.proof_backend,
+        }
+    }
+
+    fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
+
     /// Emit the report as a structured tracing event.
     pub fn log(&self) {
-        match serde_json::to_string(self) {
+        match self.to_json() {
             Ok(json) => {
                 tracing::info!(
                     startup_report = %json,
@@ -100,5 +157,226 @@ impl StartupReport {
                 tracing::warn!(error = %e, "failed to serialize startup report");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn sample_report() -> StartupReport {
+        StartupReport {
+            version: env!("CARGO_PKG_VERSION"),
+            dev_mode: true,
+            chain_id: "nexus-devnet".to_string(),
+            genesis: GenesisOutcome::Applied,
+            committee_size: 7,
+            local_validator_index: 2,
+            num_shards: 4,
+            storage_path: "data/db".to_string(),
+            session_recovery: RecoveryOutcome {
+                success: true,
+                count: 12,
+            },
+            provenance_recovery: RecoveryOutcome {
+                success: false,
+                count: 0,
+            },
+            network_discovery: Some(DiscoveryOutcome {
+                validators_seeded: 7,
+                boot_nodes_added: 3,
+                bootstrap_initiated: true,
+            }),
+            readiness_status: "healthy",
+            proof_backend: ProofBackendStatus {
+                enabled: true,
+                rpc_registered: true,
+                execution_bridge_connected: false,
+            },
+        }
+    }
+
+    #[test]
+    fn startup_report_json_snapshot_is_stable() {
+        let report = sample_report();
+        let value: serde_json::Value = serde_json::from_str(&report.to_json().unwrap()).unwrap();
+
+        assert_eq!(
+            value,
+            json!({
+                "version": env!("CARGO_PKG_VERSION"),
+                "dev_mode": true,
+                "chain_id": "nexus-devnet",
+                "genesis": "applied",
+                "committee_size": 7,
+                "local_validator_index": 2,
+                "num_shards": 4,
+                "storage_path": "data/db",
+                "session_recovery": {
+                    "success": true,
+                    "count": 12
+                },
+                "provenance_recovery": {
+                    "success": false,
+                    "count": 0
+                },
+                "network_discovery": {
+                    "validators_seeded": 7,
+                    "boot_nodes_added": 3,
+                    "bootstrap_initiated": true
+                },
+                "readiness_status": "healthy",
+                "proof_backend": {
+                    "enabled": true,
+                    "rpc_registered": true,
+                    "execution_bridge_connected": false
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn startup_report_serializes_optional_discovery_as_null() {
+        let mut report = sample_report();
+        report.network_discovery = None;
+
+        let value: serde_json::Value = serde_json::from_str(&report.to_json().unwrap()).unwrap();
+        assert_eq!(value["network_discovery"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn startup_outcome_variants_use_snake_case_strings() {
+        assert_eq!(
+            serde_json::to_string(&GenesisOutcome::Applied).unwrap(),
+            "\"applied\""
+        );
+        assert_eq!(
+            serde_json::to_string(&GenesisOutcome::AlreadyApplied).unwrap(),
+            "\"already_applied\""
+        );
+        assert_eq!(
+            serde_json::to_string(&GenesisOutcome::Skipped).unwrap(),
+            "\"skipped\""
+        );
+    }
+
+    // ── genesis_outcome_from_boot ────────────────────────────────
+
+    #[test]
+    fn genesis_outcome_from_boot_already_applied() {
+        let outcome = genesis_outcome_from_boot(true);
+        assert!(matches!(outcome, GenesisOutcome::AlreadyApplied));
+    }
+
+    #[test]
+    fn genesis_outcome_from_boot_newly_applied() {
+        let outcome = genesis_outcome_from_boot(false);
+        assert!(matches!(outcome, GenesisOutcome::Applied));
+    }
+
+    // ── StartupReport::log ──────────────────────────────────────────
+
+    #[test]
+    fn startup_report_log_does_not_panic() {
+        let report = sample_report();
+        // Just verify it doesn't panic; it logs via tracing.
+        report.log();
+    }
+
+    #[test]
+    fn recovery_and_proof_backend_shapes_are_stable() {
+        let recovery = RecoveryOutcome {
+            success: true,
+            count: 9,
+        };
+        let proof_backend = ProofBackendStatus {
+            enabled: true,
+            rpc_registered: false,
+            execution_bridge_connected: true,
+        };
+
+        assert_eq!(
+            serde_json::to_value(recovery).unwrap(),
+            json!({
+                "success": true,
+                "count": 9
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(proof_backend).unwrap(),
+            json!({
+                "enabled": true,
+                "rpc_registered": false,
+                "execution_bridge_connected": true
+            })
+        );
+    }
+
+    #[test]
+    fn startup_report_from_inputs_populates_all_fields() {
+        let report = StartupReport::from_inputs(StartupReportInputs {
+            dev_mode: false,
+            chain_id: "nexus-mainnet".to_string(),
+            genesis: GenesisOutcome::AlreadyApplied,
+            committee_size: 11,
+            local_validator_index: 5,
+            num_shards: 8,
+            storage_path: "/var/lib/nexus/db".to_string(),
+            session_recovery: RecoveryOutcome {
+                success: true,
+                count: 99,
+            },
+            provenance_recovery: RecoveryOutcome {
+                success: true,
+                count: 7,
+            },
+            network_discovery: None,
+            readiness_status: "healthy",
+            proof_backend: ProofBackendStatus {
+                enabled: true,
+                rpc_registered: true,
+                execution_bridge_connected: true,
+            },
+        });
+
+        assert_eq!(report.version, env!("CARGO_PKG_VERSION"));
+        assert!(!report.dev_mode);
+        assert_eq!(report.chain_id, "nexus-mainnet");
+        assert!(matches!(report.genesis, GenesisOutcome::AlreadyApplied));
+        assert_eq!(report.committee_size, 11);
+        assert_eq!(report.local_validator_index, 5);
+        assert_eq!(report.num_shards, 8);
+        assert_eq!(report.storage_path, "/var/lib/nexus/db");
+        assert_eq!(report.session_recovery.count, 99);
+        assert_eq!(report.provenance_recovery.count, 7);
+        assert!(report.network_discovery.is_none());
+        assert_eq!(report.readiness_status, "healthy");
+        assert!(report.proof_backend.execution_bridge_connected);
+    }
+
+    #[test]
+    fn validator_discovery_result_maps_to_discovery_outcome() {
+        let outcome = DiscoveryOutcome::from(ValidatorDiscoveryResult {
+            validators_seeded: 9,
+            boot_nodes_added: 2,
+            bootstrap_initiated: true,
+        });
+
+        assert_eq!(outcome.validators_seeded, 9);
+        assert_eq!(outcome.boot_nodes_added, 2);
+        assert!(outcome.bootstrap_initiated);
+    }
+
+    #[test]
+    fn genesis_outcome_from_boot_matches_persistence_state() {
+        assert!(matches!(
+            genesis_outcome_from_boot(true),
+            GenesisOutcome::AlreadyApplied
+        ));
+        assert!(matches!(
+            genesis_outcome_from_boot(false),
+            GenesisOutcome::Applied
+        ));
     }
 }

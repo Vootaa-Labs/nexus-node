@@ -123,3 +123,51 @@ pub fn run(args: DeployArgs) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn base_args(package_dir: &std::path::Path) -> DeployArgs {
+        DeployArgs {
+            package_dir: package_dir.to_path_buf(),
+            rpc_url: "http://127.0.0.1:8080".into(),
+            key_file: None,
+            gas_limit: 500_000,
+            nonce: 0,
+            poll_attempts: 1,
+        }
+    }
+
+    #[test]
+    fn run_rejects_invalid_rpc_url() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut args = base_args(dir.path());
+        args.rpc_url = "ftp://bad".into();
+        assert!(run(args).is_err());
+    }
+
+    #[test]
+    fn run_fails_when_no_build_output() {
+        // Empty dir has neither nexus-artifact/ nor build/ → bail before key_file check.
+        let dir = tempfile::TempDir::new().unwrap();
+        let err = run(base_args(dir.path())).unwrap_err().to_string();
+        assert!(
+            err.contains("no nexus-artifact/") || err.contains("build"),
+            "unexpected: {err}"
+        );
+    }
+
+    #[test]
+    fn run_requires_key_file_when_modules_exist() {
+        // Create nexus-artifact/bytecode/counter.mv so load_package_modules succeeds.
+        let dir = tempfile::TempDir::new().unwrap();
+        let bc_dir = dir.path().join("nexus-artifact").join("bytecode");
+        fs::create_dir_all(&bc_dir).unwrap();
+        fs::write(bc_dir.join("counter.mv"), b"fake_bytecode").unwrap();
+
+        let err = run(base_args(dir.path())).unwrap_err().to_string();
+        assert!(err.contains("--key-file"), "unexpected: {err}");
+    }
+}

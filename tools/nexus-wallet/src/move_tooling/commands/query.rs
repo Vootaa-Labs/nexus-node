@@ -50,3 +50,32 @@ pub fn run(args: QueryArgs) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_args(rpc_url: &str) -> QueryArgs {
+        QueryArgs {
+            contract: hex::encode([0u8; 32]),
+            function: "counter::get_count".into(),
+            args: vec![],
+            rpc_url: rpc_url.into(),
+        }
+    }
+
+    #[test]
+    fn run_rejects_ws_rpc_url() {
+        assert!(run(make_args("ws://localhost:9090")).is_err());
+    }
+
+    #[test]
+    fn run_rejects_ftp_rpc_url() {
+        assert!(run(make_args("ftp://example.com")).is_err());
+    }
+
+    #[test]
+    fn run_rejects_bare_hostname() {
+        assert!(run(make_args("localhost:8080")).is_err());
+    }
+}

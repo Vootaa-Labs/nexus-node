@@ -42,3 +42,36 @@ impl TryRng for OsRng {
 }
 
 impl TryCryptoRng for OsRng {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn try_next_u32_and_u64_succeed() {
+        let mut rng = OsRng;
+
+        assert!(rng.try_next_u32().is_ok());
+        assert!(rng.try_next_u64().is_ok());
+    }
+
+    #[test]
+    fn try_fill_bytes_populates_requested_buffer() {
+        let mut rng = OsRng;
+        let mut buf = [0u8; 32];
+
+        rng.try_fill_bytes(&mut buf).unwrap();
+
+        assert_eq!(buf.len(), 32);
+        assert!(buf.iter().any(|byte| *byte != 0));
+    }
+
+    #[test]
+    fn try_fill_bytes_accepts_empty_slice() {
+        let mut rng = OsRng;
+        let mut empty = [];
+
+        rng.try_fill_bytes(&mut empty).unwrap();
+        assert!(empty.is_empty());
+    }
+}

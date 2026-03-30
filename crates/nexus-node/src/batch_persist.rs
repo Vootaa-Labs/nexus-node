@@ -218,4 +218,35 @@ mod tests {
         let batches = persist.restore_batches().unwrap();
         assert_eq!(batches.len(), 2);
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn delete_batch_removes_entry() {
+        let store = MemoryStore::new();
+        let persist = BatchPersistence::new(store);
+        let digest = Blake3Digest([50u8; 32]);
+        let txs = vec![make_tx(10)];
+
+        persist.put_batch(&digest, &txs).unwrap();
+        assert!(persist.get_batch(&digest).unwrap().is_some());
+
+        persist.delete_batch(&digest).unwrap();
+        assert!(persist.get_batch(&digest).unwrap().is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn delete_nonexistent_batch_is_ok() {
+        let store = MemoryStore::new();
+        let persist = BatchPersistence::new(store);
+        let digest = Blake3Digest([77u8; 32]);
+        // Should not error on deleting a key that doesn't exist
+        persist.delete_batch(&digest).unwrap();
+    }
+
+    #[test]
+    fn batch_persist_error_display() {
+        let codec = BatchPersistError::Codec("bad bytes".into());
+        assert!(format!("{codec}").contains("codec error"));
+        let storage = BatchPersistError::Storage("disk full".into());
+        assert!(format!("{storage}").contains("storage error"));
+    }
 }

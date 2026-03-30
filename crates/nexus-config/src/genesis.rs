@@ -413,4 +413,94 @@ mod tests {
         assert_ne!(cfg1.genesis_hash(), nexus_primitives::Blake3Digest::ZERO);
         assert_ne!(cfg2.genesis_hash(), nexus_primitives::Blake3Digest::ZERO);
     }
+
+    // ── Additional validation branch coverage ───────────────────────────
+
+    #[test]
+    fn test_empty_dilithium_key_rejected() {
+        let mut cfg = GenesisConfig::for_testing();
+        cfg.validators[0].dilithium_verify_key_hex = String::new();
+        let err = cfg.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            GenesisValidationError::EmptyKey {
+                validator_index: 0,
+                key_type: "dilithium_verify_key"
+            }
+        ));
+    }
+
+    #[test]
+    fn test_empty_kyber_key_rejected() {
+        let mut cfg = GenesisConfig::for_testing();
+        cfg.validators[0].kyber_encaps_key_hex = String::new();
+        let err = cfg.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            GenesisValidationError::EmptyKey {
+                validator_index: 0,
+                key_type: "kyber_encaps_key"
+            }
+        ));
+    }
+
+    #[test]
+    fn test_empty_peer_id_rejected() {
+        let mut cfg = GenesisConfig::for_testing();
+        cfg.validators[0].network_peer_id = String::new();
+        let err = cfg.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            GenesisValidationError::EmptyKey {
+                validator_index: 0,
+                key_type: "network_peer_id"
+            }
+        ));
+    }
+
+    #[test]
+    fn test_invalid_dilithium_hex_rejected() {
+        let mut cfg = GenesisConfig::for_testing();
+        cfg.validators[0].dilithium_verify_key_hex = "ZZZZ".to_owned();
+        let err = cfg.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            GenesisValidationError::InvalidHex {
+                validator_index: 0,
+                key_type: "dilithium_verify_key"
+            }
+        ));
+    }
+
+    #[test]
+    fn test_invalid_kyber_hex_rejected() {
+        let mut cfg = GenesisConfig::for_testing();
+        cfg.validators[0].kyber_encaps_key_hex = "ZZZZ".to_owned();
+        let err = cfg.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            GenesisValidationError::InvalidHex {
+                validator_index: 0,
+                key_type: "kyber_encaps_key"
+            }
+        ));
+    }
+
+    #[test]
+    fn test_all_error_display_variants() {
+        let errors: Vec<GenesisValidationError> = vec![
+            GenesisValidationError::EmptyChainId,
+            GenesisValidationError::NoValidators,
+            GenesisValidationError::ZeroShards,
+            GenesisValidationError::InsufficientValidators { count: 2, minimum: 4 },
+            GenesisValidationError::EmptyKey { validator_index: 0, key_type: "falcon_verify_key" },
+            GenesisValidationError::ZeroStake { validator_index: 1 },
+            GenesisValidationError::InvalidHex { validator_index: 0, key_type: "falcon_verify_key" },
+            GenesisValidationError::InvalidAllocationAddress { index: 0 },
+        ];
+        for err in &errors {
+            let msg = format!("{err}");
+            assert!(!msg.is_empty(), "Display should be non-empty for {err:?}");
+        }
+    }
 }
