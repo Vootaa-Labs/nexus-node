@@ -7,7 +7,7 @@ Read this file first, then `.github/Code_Summary.md`, then `README.md` when you 
 
 ## Workspace Snapshot
 
-- Version: v0.1.14
+- Version: v0.1.15
 - Workspace members: 15 Cargo packages.
 - Core libraries: primitives, crypto, network, storage, config, consensus, execution, intent, rpc.
 - Assembly crate: `nexus-node` as both library and `nexus-node` binary.

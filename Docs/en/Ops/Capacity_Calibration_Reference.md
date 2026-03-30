@@ -1,6 +1,6 @@
 # Nexus Capacity Calibration Reference
 
-> Version: `v0.1.14`
+> Version: `v0.1.15`
 > Audience: operators, release engineers, RPC owners
 
 ## 1. Gas Budget Calibration Results

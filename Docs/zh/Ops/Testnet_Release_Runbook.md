@@ -53,7 +53,7 @@ make devnet-smoke
 
 ### 1.2 文档一致性
 
-在发布前核对以下文档是否已同步到 `v0.1.14` 基线：
+在发布前核对以下文档是否已同步到 `v0.1.15` 基线：
 
 - `Docs/zh/Ops/Testnet_Operations_Guide.md`
 - `Docs/en/Ops/Testnet_Access_Policy.md`
