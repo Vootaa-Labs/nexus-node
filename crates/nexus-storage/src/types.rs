@@ -6,7 +6,7 @@
 //! All column family names and key formats are **FROZEN-2**:
 //! changes require an RFC and performance-impact proof.
 
-use nexus_primitives::{AccountAddress, ShardId};
+use nexus_primitives::{AccountAddress, Blake3Digest, CommitSequence, ShardId};
 use serde::{Deserialize, Serialize};
 
 // ── Column Families (FROZEN-2) ───────────────────────────────────────────────
@@ -48,6 +48,20 @@ pub enum ColumnFamily {
     /// atomic transfers.  Both source-shard locks and target-shard claims
     /// reference the same lock digest key.
     HtlcLocks,
+    /// Block → transaction index: `CommitSequence (8B BE) → Vec<TxDigest> (BCS)`.
+    ///
+    /// Enables batch receipt retrieval by block sequence number.
+    /// FROZEN-2 addition (v0.1.15).
+    BlockTxIndex,
+    /// Contract events: multi-key index for event queries.
+    ///
+    /// Three key patterns share this CF:
+    /// - Primary:     `e:<block_seq 8B><tx_index 4B><event_seq 4B>` → `ContractEvent (BCS)`
+    /// - By-contract: `c:<emitter 32B><block_seq 8B><event_seq 4B>` → `(empty)`
+    /// - By-type:     `t:<type_hash 32B><block_seq 8B><event_seq 4B>` → `(empty)`
+    ///
+    /// FROZEN-2 addition (v0.1.15).
+    Events,
 }
 
 impl ColumnFamily {
@@ -66,6 +80,8 @@ impl ColumnFamily {
             Self::CommitmentLeaves => "cf_commitment_leaves",
             Self::CommitmentNodes => "cf_commitment_nodes",
             Self::HtlcLocks => "cf_htlc_locks",
+            Self::BlockTxIndex => "cf_block_tx_index",
+            Self::Events => "cf_events",
         }
     }
 
@@ -84,6 +100,8 @@ impl ColumnFamily {
             Self::CommitmentLeaves,
             Self::CommitmentNodes,
             Self::HtlcLocks,
+            Self::BlockTxIndex,
+            Self::Events,
         ]
     }
 }
@@ -135,6 +153,74 @@ impl AccountKey {
 // NOTE: AsRef<[u8]> was removed — composite keys cannot cheaply reference a
 // contiguous byte slice without an internal buffer. Callers should use
 // `to_bytes()` to obtain the wire-format bytes. (M-001 remediation)
+
+/// Key encoder for the `CF_EVENTS` column family.
+///
+/// Three key patterns are used to support different query access paths:
+/// - **Primary** (`e:` prefix): ordered by block, then tx index, then event sequence.
+/// - **By-contract** (`c:` prefix): ordered by emitter address, then block, then event sequence.
+/// - **By-type** (`t:` prefix): ordered by event type hash, then block, then event sequence.
+///
+/// Secondary keys (`c:`, `t:`) store empty values — lookups retrieve the event
+/// from the primary key.
+pub struct EventKey;
+
+impl EventKey {
+    /// Primary key: `b'e' || block_seq(8B BE) || tx_index(4B BE) || event_seq(4B BE)` = 17 bytes.
+    pub fn primary(block_seq: CommitSequence, tx_index: u32, event_seq: u32) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(17);
+        buf.push(b'e');
+        buf.extend_from_slice(&block_seq.0.to_be_bytes());
+        buf.extend_from_slice(&tx_index.to_be_bytes());
+        buf.extend_from_slice(&event_seq.to_be_bytes());
+        buf
+    }
+
+    /// By-contract key: `b'c' || emitter(32B) || block_seq(8B BE) || event_seq(4B BE)` = 45 bytes.
+    pub fn by_contract(
+        emitter: &AccountAddress,
+        block_seq: CommitSequence,
+        event_seq: u32,
+    ) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(45);
+        buf.push(b'c');
+        buf.extend_from_slice(emitter.as_ref());
+        buf.extend_from_slice(&block_seq.0.to_be_bytes());
+        buf.extend_from_slice(&event_seq.to_be_bytes());
+        buf
+    }
+
+    /// By-type key: `b't' || type_hash(32B) || block_seq(8B BE) || event_seq(4B BE)` = 45 bytes.
+    pub fn by_type(type_hash: &Blake3Digest, block_seq: CommitSequence, event_seq: u32) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(45);
+        buf.push(b't');
+        buf.extend_from_slice(type_hash.as_ref());
+        buf.extend_from_slice(&block_seq.0.to_be_bytes());
+        buf.extend_from_slice(&event_seq.to_be_bytes());
+        buf
+    }
+
+    /// Returns the 1-byte prefix for primary keys (`b'e'`).
+    pub fn primary_prefix() -> &'static [u8] {
+        b"e"
+    }
+
+    /// Returns the 33-byte prefix for scanning events by a specific contract.
+    pub fn contract_prefix(emitter: &AccountAddress) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(33);
+        buf.push(b'c');
+        buf.extend_from_slice(emitter.as_ref());
+        buf
+    }
+
+    /// Returns the 33-byte prefix for scanning events by a specific type hash.
+    pub fn type_prefix(type_hash: &Blake3Digest) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(33);
+        buf.push(b't');
+        buf.extend_from_slice(type_hash.as_ref());
+        buf
+    }
+}
 
 /// Key for the `CF_STATE` column family — identifies a resource under an account.
 ///
@@ -229,11 +315,13 @@ mod tests {
             "cf_commitment_nodes"
         );
         assert_eq!(ColumnFamily::HtlcLocks.as_str(), "cf_htlc_locks");
+        assert_eq!(ColumnFamily::BlockTxIndex.as_str(), "cf_block_tx_index");
+        assert_eq!(ColumnFamily::Events.as_str(), "cf_events");
     }
 
     #[test]
     fn all_column_families_count() {
-        assert_eq!(ColumnFamily::all().len(), 12);
+        assert_eq!(ColumnFamily::all().len(), 14);
     }
 
     #[test]
@@ -269,5 +357,81 @@ mod tests {
     #[test]
     fn resource_key_wrong_length() {
         assert!(ResourceKey::from_bytes(&[0u8; 10]).is_err());
+    }
+
+    #[test]
+    fn event_key_primary_length() {
+        let key = EventKey::primary(CommitSequence(1), 0, 0);
+        assert_eq!(key.len(), 17);
+        assert_eq!(key[0], b'e');
+    }
+
+    #[test]
+    fn event_key_by_contract_length() {
+        let addr = AccountAddress([0xAA; 32]);
+        let key = EventKey::by_contract(&addr, CommitSequence(1), 0);
+        assert_eq!(key.len(), 45);
+        assert_eq!(key[0], b'c');
+    }
+
+    #[test]
+    fn event_key_by_type_length() {
+        let hash = Blake3Digest::from_bytes([0xBB; 32]);
+        let key = EventKey::by_type(&hash, CommitSequence(1), 0);
+        assert_eq!(key.len(), 45);
+        assert_eq!(key[0], b't');
+    }
+
+    #[test]
+    fn event_key_primary_ordering() {
+        // Keys for block 1 sort before block 2.
+        let k1 = EventKey::primary(CommitSequence(1), 0, 0);
+        let k2 = EventKey::primary(CommitSequence(2), 0, 0);
+        assert!(k1 < k2);
+        // Within same block, tx_index orders.
+        let k3 = EventKey::primary(CommitSequence(1), 1, 0);
+        assert!(k1 < k3);
+    }
+
+    #[test]
+    fn event_key_primary_embeds_components() {
+        let key = EventKey::primary(CommitSequence(256), 3, 7);
+        // Prefix
+        assert_eq!(key[0], b'e');
+        // block_seq 256 in big-endian
+        let seq = u64::from_be_bytes(key[1..9].try_into().unwrap());
+        assert_eq!(seq, 256);
+        // tx_index
+        let tx = u32::from_be_bytes(key[9..13].try_into().unwrap());
+        assert_eq!(tx, 3);
+        // event_seq
+        let ev = u32::from_be_bytes(key[13..17].try_into().unwrap());
+        assert_eq!(ev, 7);
+    }
+
+    #[test]
+    fn event_key_contract_prefix_scopes_emitter() {
+        let addr_a = AccountAddress([0xAA; 32]);
+        let addr_b = AccountAddress([0xBB; 32]);
+        let k1 = EventKey::by_contract(&addr_a, CommitSequence(1), 0);
+        let k2 = EventKey::by_contract(&addr_b, CommitSequence(1), 0);
+        // Different emitter → different prefix → disjoint scan range.
+        let prefix_a = EventKey::contract_prefix(&addr_a);
+        let prefix_b = EventKey::contract_prefix(&addr_b);
+        assert!(k1.starts_with(&prefix_a));
+        assert!(!k1.starts_with(&prefix_b));
+        assert!(k2.starts_with(&prefix_b));
+        assert!(!k2.starts_with(&prefix_a));
+    }
+
+    #[test]
+    fn event_key_type_prefix_scopes_hash() {
+        let hash_a = Blake3Digest::from_bytes([0xAA; 32]);
+        let hash_b = Blake3Digest::from_bytes([0xBB; 32]);
+        let k1 = EventKey::by_type(&hash_a, CommitSequence(1), 0);
+        let prefix_a = EventKey::type_prefix(&hash_a);
+        let prefix_b = EventKey::type_prefix(&hash_b);
+        assert!(k1.starts_with(&prefix_a));
+        assert!(!k1.starts_with(&prefix_b));
     }
 }

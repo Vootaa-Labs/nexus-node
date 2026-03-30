@@ -448,21 +448,41 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
         .cloned()
         .unwrap_or_else(SharedChainHead::new);
 
+    // Create commitment tracker early so it can be shared with the query
+    // backend (account state proofs), the RPC layer (proof queries), and
+    // the execution bridge (state updates).
+    let commitment_tracker = nexus_node::commitment_tracker::new_shared_tracker_with_persistence(
+        store.clone(),
+        config.storage.commitment_cache_size,
+    )
+    .context("failed to initialise persistent commitment tracker")?;
+
     let query_backend = Arc::new(
         StorageQueryBackend::new(store.clone(), epoch.clone(), commit_seq.clone())
             .with_peer_count({
                 let disc = net_handle.discovery.clone();
                 Arc::new(move || disc.routing_health().known_peers)
             })
-            .with_chain_head(rpc_chain_head)
+            .with_chain_head(rpc_chain_head.clone())
             .with_readiness(readiness.clone())
             .with_gas_budget(config.rpc.query_gas_budget)
-            .with_num_shards(num_shards),
+            .with_num_shards(num_shards)
+            .with_commitment_tracker(commitment_tracker.clone()),
+    );
+
+    let block_backend: Arc<dyn nexus_rpc::BlockBackend> = Arc::new(
+        nexus_node::backends::StorageBlockBackend::new(store.clone(), rpc_chain_head),
+    );
+
+    let event_backend: Arc<dyn nexus_rpc::EventBackend> = Arc::new(
+        nexus_node::backends::StorageEventBackend::new(store.clone()),
     );
 
     let mut consensus_backend = LiveConsensusBackend::new(engine)
         .with_epoch_manager(epoch_manager.clone())
-        .with_store(store.clone());
+        .with_store(store.clone())
+        .with_num_shards(num_shards)
+        .with_devnet_mode(config.rpc.faucet_enabled);
     let engine_handle = consensus_backend.engine(); // shared with consensus bridge
 
     // ── 8. Spawn intent service ─────────────────────────────────────────
@@ -493,14 +513,6 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
 
     // Benchmark lifecycle tracker – bounded in-memory LRU for tx latency observation.
     let tx_lifecycle = Arc::new(nexus_rpc::TxLifecycleRegistry::new(100_000));
-
-    // Create commitment tracker early so it can be shared with both
-    // the RPC layer (proof queries) and the execution bridge (state updates).
-    let commitment_tracker = nexus_node::commitment_tracker::new_shared_tracker_with_persistence(
-        store.clone(),
-        config.storage.commitment_cache_size,
-    )
-    .context("failed to initialise persistent commitment tracker")?;
 
     // Install Prometheus metrics recorder so metrics::counter! et al.
     // are captured and can be scraped via GET /metrics.
@@ -562,7 +574,9 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
         .session_provenance(session_provenance_backend)
         .state_proof(Arc::new(nexus_node::backends::LiveStateProofBackend::new(
             commitment_tracker.clone(),
-        )));
+        )))
+        .block_backend(block_backend)
+        .event_backend(event_backend);
 
     if config.rpc.rate_limit_enabled {
         builder = builder.rate_limit(

@@ -34,6 +34,7 @@ pub use block_stm::AnchorStateEntry;
 pub use block_stm::BlockStmExecutor;
 pub use error::{ExecutionError, ExecutionResult};
 pub use metrics::ExecutionMetrics;
+pub use move_adapter::events::ContractEvent;
 pub use move_adapter::query::QueryResult;
 pub use service::{spawn_execution_service, ExecutionServiceHandle};
 pub use traits::{StateView, TransactionExecutor};

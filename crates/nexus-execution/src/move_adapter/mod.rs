@@ -24,7 +24,7 @@
 pub(crate) mod abi;
 pub(crate) mod builtin_vm;
 pub(crate) mod entry_function;
-pub(crate) mod events;
+pub mod events;
 pub(crate) mod gas_meter;
 #[cfg(feature = "move-vm")]
 pub(crate) mod move_runtime;

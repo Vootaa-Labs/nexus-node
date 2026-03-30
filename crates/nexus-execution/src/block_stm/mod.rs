@@ -369,6 +369,7 @@ impl BlockStmExecutor {
                 status: record.status,
                 gas_used: record.gas_used,
                 state_changes: record.state_changes,
+                events: vec![],
                 timestamp: self.timestamp,
             });
         }
@@ -440,6 +441,7 @@ impl BlockStmExecutor {
                     status: rej.status,
                     gas_used: rej.gas_used,
                     state_changes: rej.state_changes,
+                    events: vec![],
                     timestamp: self.timestamp,
                 });
                 continue;
@@ -462,6 +464,7 @@ impl BlockStmExecutor {
                 status: record.status,
                 gas_used: record.gas_used,
                 state_changes: record.state_changes,
+                events: vec![],
                 timestamp: self.timestamp,
             });
         }

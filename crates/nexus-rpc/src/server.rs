@@ -48,6 +48,8 @@ pub struct RpcServiceBuilder {
     num_shards: u16,
     tx_lifecycle: Option<Arc<crate::tx_lifecycle::TxLifecycleRegistry>>,
     htlc: Option<Arc<dyn crate::rest::HtlcBackend>>,
+    block: Option<Arc<dyn crate::rest::BlockBackend>>,
+    event_backend: Option<Arc<dyn crate::rest::EventBackend>>,
 }
 
 impl RpcServiceBuilder {
@@ -79,6 +81,8 @@ impl RpcServiceBuilder {
             num_shards: 1,
             tx_lifecycle: None,
             htlc: None,
+            block: None,
+            event_backend: None,
         }
     }
 
@@ -218,6 +222,18 @@ impl RpcServiceBuilder {
         self
     }
 
+    /// Set the block query backend (optional).
+    pub fn block_backend(mut self, backend: Arc<dyn crate::rest::BlockBackend>) -> Self {
+        self.block = Some(backend);
+        self
+    }
+
+    /// Set the event query backend (optional).
+    pub fn event_backend(mut self, backend: Arc<dyn crate::rest::EventBackend>) -> Self {
+        self.event_backend = Some(backend);
+        self
+    }
+
     /// Set the in-memory transaction lifecycle tracker used by benchmark tooling.
     pub fn tx_lifecycle(mut self, tracker: Arc<crate::tx_lifecycle::TxLifecycleRegistry>) -> Self {
         self.tx_lifecycle = Some(tracker);
@@ -268,6 +284,8 @@ impl RpcServiceBuilder {
             num_shards: self.num_shards,
             tx_lifecycle: self.tx_lifecycle,
             htlc: self.htlc,
+            block: self.block,
+            event_backend: self.event_backend,
         });
 
         RpcService {

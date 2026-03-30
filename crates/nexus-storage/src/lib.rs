@@ -66,4 +66,4 @@ pub use rocks::migration::{SchemaVersion, CURRENT_SCHEMA_VERSION};
 pub use rocks::RocksStore;
 pub use rocks::{CfStats, PruneResult, SnapshotManifest, SnapshotProvenance, SNAPSHOT_SIGN_DOMAIN};
 pub use traits::{BackupHashTree, StateCommitment, StateStorage, WriteBatchOps};
-pub use types::{AccountKey, ColumnFamily, ResourceKey, WriteOp};
+pub use types::{AccountKey, ColumnFamily, EventKey, ResourceKey, WriteOp};

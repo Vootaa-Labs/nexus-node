@@ -92,5 +92,128 @@ fn session_to_dto(s: &nexus_intent::AgentSession) -> SessionDto {
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/v2/sessions", get(list_sessions))
-        .route("/v2/sessions/{id}", get(get_session))
+        .route("/v2/sessions/:id", get(get_session))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rest::test_helpers::{
+        mock_state, mock_state_with_session_provenance, MockSessionProvenanceBackend,
+    };
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use nexus_intent::agent_core::session::SessionState;
+    use nexus_intent::AgentSession;
+    use nexus_primitives::{Blake3Digest, TimestampMs};
+    use tower::ServiceExt;
+
+    fn sample_session(id_byte: u8, state: SessionState) -> AgentSession {
+        AgentSession {
+            session_id: Blake3Digest([id_byte; 32]),
+            created_at_ms: TimestampMs(1_700_000_000_000),
+            replay_window_ms: 60_000,
+            current_state: state,
+            plan_hash: None,
+            confirmation_ref: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn session_returns_503_when_backend_absent() {
+        let app = router().with_state(mock_state());
+        let id_hex = "aa".repeat(32);
+        let req = Request::builder()
+            .uri(format!("/v2/sessions/{id_hex}"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn get_session_returns_200() {
+        let session = sample_session(0xaa, SessionState::Received);
+        let backend = MockSessionProvenanceBackend::new().with_session(session);
+        let app = router().with_state(mock_state_with_session_provenance(backend));
+        let id_hex = "aa".repeat(32);
+        let req = Request::builder()
+            .uri(format!("/v2/sessions/{id_hex}"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let dto: SessionDto = serde_json::from_slice(&body).unwrap();
+        assert_eq!(dto.session_id, id_hex);
+        assert_eq!(dto.state, "Received");
+    }
+
+    #[tokio::test]
+    async fn session_not_found_returns_404() {
+        let backend = MockSessionProvenanceBackend::new();
+        let app = router().with_state(mock_state_with_session_provenance(backend));
+        let id_hex = "ff".repeat(32);
+        let req = Request::builder()
+            .uri(format!("/v2/sessions/{id_hex}"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn session_invalid_hex_returns_400() {
+        let backend = MockSessionProvenanceBackend::new();
+        let app = router().with_state(mock_state_with_session_provenance(backend));
+        let req = Request::builder()
+            .uri("/v2/sessions/not_valid_hex")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn list_sessions_returns_all() {
+        let backend = MockSessionProvenanceBackend::new()
+            .with_session(sample_session(0xaa, SessionState::Received))
+            .with_session(sample_session(0xbb, SessionState::Finalized));
+        let app = router().with_state(mock_state_with_session_provenance(backend));
+        let req = Request::builder()
+            .uri("/v2/sessions")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let list: SessionListResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(list.total, 2);
+        assert_eq!(list.sessions.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn list_active_sessions_filters_terminal() {
+        let backend = MockSessionProvenanceBackend::new()
+            .with_session(sample_session(0xaa, SessionState::Received))
+            .with_session(sample_session(0xbb, SessionState::Finalized))
+            .with_session(sample_session(0xcc, SessionState::Aborted));
+        let app = router().with_state(mock_state_with_session_provenance(backend));
+        let req = Request::builder()
+            .uri("/v2/sessions?active=true")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let list: SessionListResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(list.total, 1);
+        assert_eq!(list.sessions[0].state, "Received");
+    }
 }

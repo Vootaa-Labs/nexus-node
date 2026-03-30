@@ -13,6 +13,8 @@
 //! | `s:` | `s:<session_id 32B><provenance_id 32B>` | empty |
 //! | `c:` | `c:<token_id_bcs><provenance_id 32B>` | empty |
 //! | `o:` | `o:<created_at_ms 8B BE><provenance_id 32B>` | empty |
+//! | `t:` | `t:<tx_hash 32B><provenance_id 32B>` | empty |
+//! | `S:` | `S:<status 1B><created_at_ms 8B BE><provenance_id 32B>` | empty |
 //! | `r:` | `r:<anchor_digest 32B>` | BCS(AnchorReceipt) |
 //! | `b:` | `b:<batch_seq 8B BE>` | anchor_digest 32B |
 //! | `n:` | `n:<meta_key>` | u64 BE (metadata counters) |
@@ -107,6 +109,42 @@ fn prefix_end(prefix: &[u8]) -> Vec<u8> {
     end.push(0xFF);
     end.push(0xFF);
     end
+}
+
+/// Key for tx_hash reverse index: `t:<tx_hash 32B><provenance_id 32B>`.
+fn tx_hash_index_key(tx_hash: &Blake3Digest, provenance_id: &Blake3Digest) -> Vec<u8> {
+    let mut k = Vec::with_capacity(65);
+    k.push(b't');
+    k.extend_from_slice(&tx_hash.0);
+    k.extend_from_slice(&provenance_id.0);
+    k
+}
+
+/// Prefix for tx_hash index scan: `t:<tx_hash>`.
+fn tx_hash_prefix(tx_hash: &Blake3Digest) -> Vec<u8> {
+    let mut k = Vec::with_capacity(33);
+    k.push(b't');
+    k.extend_from_slice(&tx_hash.0);
+    k
+}
+
+/// Key for status index: `S:<status 1B><created_at_ms 8B BE><provenance_id 32B>`.
+fn status_index_key(
+    status: ProvenanceStatus,
+    created_at_ms: TimestampMs,
+    provenance_id: &Blake3Digest,
+) -> Vec<u8> {
+    let mut k = Vec::with_capacity(42);
+    k.push(b'S');
+    k.push(status as u8);
+    k.extend_from_slice(&created_at_ms.0.to_be_bytes());
+    k.extend_from_slice(&provenance_id.0);
+    k
+}
+
+/// Prefix for status index scan: `S:<status 1B>`.
+fn status_prefix(status: ProvenanceStatus) -> Vec<u8> {
+    vec![b'S', status as u8]
 }
 
 /// Extract provenance_id from the last 32 bytes of an index key.
@@ -216,6 +254,18 @@ impl<S: StateStorage> RocksProvenanceStore<S> {
             ordered_index_key(record.created_at_ms, &record.provenance_id),
             vec![],
         );
+        if let Some(tx_hash) = &record.tx_hash {
+            batch.put_cf(
+                CF,
+                tx_hash_index_key(tx_hash, &record.provenance_id),
+                vec![],
+            );
+        }
+        batch.put_cf(
+            CF,
+            status_index_key(record.status, record.created_at_ms, &record.provenance_id),
+            vec![],
+        );
 
         self.store
             .write_batch(batch)
@@ -238,8 +288,18 @@ impl<S: StateStorage> RocksProvenanceStore<S> {
             record.status = status;
             let value = bcs::to_bytes(&record)
                 .map_err(|e| crate::error::IntentError::Codec(e.to_string()))?;
+            let mut batch = self.store.new_batch();
+            batch.put_cf(CF, primary_key(provenance_id), value);
+            // Append new status index entry (stale entries are harmless;
+            // query deduplicates by provenance_id).
+            batch.put_cf(
+                CF,
+                status_index_key(status, record.created_at_ms, provenance_id),
+                vec![],
+            );
             self.store
-                .put_sync(CF, primary_key(provenance_id), value)
+                .write_batch(batch)
+                .await
                 .map_err(|e| crate::error::IntentError::Storage(e.to_string()))?;
             Ok(true)
         } else {
@@ -257,8 +317,12 @@ impl<S: StateStorage> RocksProvenanceStore<S> {
             record.tx_hash = Some(tx_hash);
             let value = bcs::to_bytes(&record)
                 .map_err(|e| crate::error::IntentError::Codec(e.to_string()))?;
+            let mut batch = self.store.new_batch();
+            batch.put_cf(CF, primary_key(provenance_id), value);
+            batch.put_cf(CF, tx_hash_index_key(&tx_hash, provenance_id), vec![]);
             self.store
-                .put_sync(CF, primary_key(provenance_id), value)
+                .write_batch(batch)
+                .await
                 .map_err(|e| crate::error::IntentError::Storage(e.to_string()))?;
             Ok(true)
         } else {
@@ -302,6 +366,26 @@ impl<S: StateStorage> RocksProvenanceStore<S> {
         params: &ProvenanceQueryParams,
     ) -> ProvenanceQueryResult {
         let prefix = capability_prefix(token);
+        self.query_by_index(&prefix, params)
+    }
+
+    /// Query by transaction hash with pagination.
+    pub fn query_by_tx_hash(
+        &self,
+        tx_hash: &Blake3Digest,
+        params: &ProvenanceQueryParams,
+    ) -> ProvenanceQueryResult {
+        let prefix = tx_hash_prefix(tx_hash);
+        self.query_by_index(&prefix, params)
+    }
+
+    /// Query by provenance status with pagination.
+    pub fn query_by_status(
+        &self,
+        status: ProvenanceStatus,
+        params: &ProvenanceQueryParams,
+    ) -> ProvenanceQueryResult {
+        let prefix = status_prefix(status);
         self.query_by_index(&prefix, params)
     }
 
@@ -398,6 +482,13 @@ impl<S: StateStorage> RocksProvenanceStore<S> {
                     batch.delete_cf(CF, capability_index_key(token, id));
                 }
                 batch.delete_cf(CF, ordered_index_key(record.created_at_ms, id));
+                if let Some(tx_hash) = &record.tx_hash {
+                    batch.delete_cf(CF, tx_hash_index_key(tx_hash, id));
+                }
+                batch.delete_cf(
+                    CF,
+                    status_index_key(record.status, record.created_at_ms, id),
+                );
                 deleted += 1;
             }
         }

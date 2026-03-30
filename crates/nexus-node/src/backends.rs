@@ -21,15 +21,63 @@ use nexus_primitives::{
     AccountAddress, Amount, CommitSequence, EpochNumber, ShardId, TokenId, TxDigest, ValidatorIndex,
 };
 use nexus_rpc::{
-    ChainHeadDto, ConsensusBackend, ConsensusStatusDto, ContractQueryRequest,
-    ContractQueryResponse, EpochHistoryResponse, EpochInfoDto, EpochTransitionDto, HealthResponse,
-    IntentBackend, NetworkBackend, QueryBackend, RpcError, RpcResult, SessionProvenanceBackend,
+    AccountStateProofDto, BlockBackend, BlockDto, BlockHeaderDto, BlockReceiptsDto, ChainHeadDto,
+    ConsensusBackend, ConsensusStatusDto, ContractQueryRequest, ContractQueryResponse,
+    EpochHistoryResponse, EpochInfoDto, EpochTransitionDto, HealthResponse, IntentBackend,
+    NetworkBackend, QueryBackend, RpcError, RpcResult, SessionProvenanceBackend,
     SlashValidatorResponse, SubsystemHealthDto, TransactionReceiptDto, ValidatorInfoDto,
+    ZkProofDto,
 };
 use nexus_storage::traits::StateStorage;
 use nexus_storage::ColumnFamily;
 
 use crate::readiness::NodeReadiness;
+
+// ── Merkle proof conversion ────────────────────────────────────────────
+
+/// Convert an internal `MerkleProof` to the RPC wire DTO.
+fn merkle_proof_to_dto(proof: &nexus_storage::MerkleProof) -> nexus_rpc::MerkleProofDto {
+    match proof {
+        nexus_storage::MerkleProof::Inclusion {
+            leaf_index,
+            leaf_count,
+            siblings,
+        } => nexus_rpc::MerkleProofDto {
+            proof_type: "inclusion".into(),
+            leaf_count: *leaf_count,
+            leaf_index: Some(*leaf_index),
+            siblings: siblings.iter().map(|s| hex::encode(s.0)).collect(),
+            left_neighbor: None,
+            right_neighbor: None,
+        },
+        nexus_storage::MerkleProof::Exclusion {
+            leaf_count,
+            left_neighbor,
+            right_neighbor,
+        } => nexus_rpc::MerkleProofDto {
+            proof_type: "exclusion".into(),
+            leaf_count: *leaf_count,
+            leaf_index: None,
+            siblings: vec![],
+            left_neighbor: left_neighbor
+                .as_ref()
+                .map(|n| nexus_rpc::MerkleNeighborProofDto {
+                    key: hex::encode(&n.key),
+                    value: hex::encode(&n.value),
+                    leaf_index: n.leaf_index,
+                    siblings: n.siblings.iter().map(|s| hex::encode(s.0)).collect(),
+                }),
+            right_neighbor: right_neighbor
+                .as_ref()
+                .map(|n| nexus_rpc::MerkleNeighborProofDto {
+                    key: hex::encode(&n.key),
+                    value: hex::encode(&n.value),
+                    leaf_index: n.leaf_index,
+                    siblings: n.siblings.iter().map(|s| hex::encode(s.0)).collect(),
+                }),
+        },
+    }
+}
 
 // ── Shared chain-head state ────────────────────────────────────────────
 
@@ -131,6 +179,8 @@ pub struct StorageQueryBackend<S: StateStorage> {
     readiness: Option<NodeReadiness>,
     /// Gas budget cap for read-only view queries (0 = unlimited).
     query_gas_budget: u64,
+    /// Commitment tracker for Merkle proof generation (optional).
+    commitment_tracker: Option<crate::commitment_tracker::SharedCommitmentTracker>,
 }
 
 impl<S: StateStorage> StorageQueryBackend<S> {
@@ -154,6 +204,7 @@ impl<S: StateStorage> StorageQueryBackend<S> {
             chain_head: SharedChainHead::new(),
             readiness: None,
             query_gas_budget: 0,
+            commitment_tracker: None,
         }
     }
 
@@ -166,6 +217,15 @@ impl<S: StateStorage> StorageQueryBackend<S> {
     /// Set the shared chain-head state.
     pub fn with_chain_head(mut self, head: SharedChainHead) -> Self {
         self.chain_head = head;
+        self
+    }
+
+    /// Set the commitment tracker for Merkle proof generation.
+    pub fn with_commitment_tracker(
+        mut self,
+        tracker: crate::commitment_tracker::SharedCommitmentTracker,
+    ) -> Self {
+        self.commitment_tracker = Some(tracker);
         self
     }
 
@@ -394,6 +454,69 @@ impl<S: StateStorage> QueryBackend for StorageQueryBackend<S> {
     fn chain_head(&self) -> Result<Option<ChainHeadDto>, RpcError> {
         Ok(self.chain_head.get())
     }
+
+    fn account_state_proof(
+        &self,
+        addr: &nexus_primitives::AccountAddress,
+    ) -> RpcResult<AccountStateProofDto> {
+        let tracker = self
+            .commitment_tracker
+            .as_ref()
+            .ok_or_else(|| RpcError::Unavailable("state proofs not available".into()))?;
+
+        // Read balance from cf_state.
+        let balance_key = self.balance_key(addr);
+        let balance = self
+            .store
+            .get_sync(ColumnFamily::State.as_str(), &balance_key)
+            .map_err(|e| RpcError::Internal(format!("storage error: {e}")))?
+            .map(|bytes| {
+                if bytes.len() == 8 {
+                    u64::from_le_bytes(bytes.try_into().unwrap())
+                } else {
+                    0
+                }
+            })
+            .unwrap_or(0);
+
+        // Read nonce from cf_state (AccountKey ‖ "nonce").
+        let mut nonce_key = nexus_storage::AccountKey {
+            shard_id: self.resolve_shard(addr),
+            address: *addr,
+        }
+        .to_bytes();
+        nonce_key.extend_from_slice(b"nonce");
+        let nonce = self
+            .store
+            .get_sync(ColumnFamily::State.as_str(), &nonce_key)
+            .map_err(|e| RpcError::Internal(format!("storage error: {e}")))?
+            .map(|bytes| {
+                if bytes.len() == 8 {
+                    u64::from_le_bytes(bytes.try_into().unwrap())
+                } else {
+                    0
+                }
+            })
+            .unwrap_or(0);
+
+        // Generate Merkle proof for the balance key.
+        let guard = tracker
+            .read()
+            .map_err(|_| RpcError::Internal("commitment tracker lock poisoned".into()))?;
+        let root = guard.commitment_root();
+        let (_value, proof) = guard
+            .prove_key(&balance_key)
+            .map_err(|e| RpcError::Internal(format!("proof generation failed: {e}")))?;
+
+        Ok(AccountStateProofDto {
+            address: hex::encode(addr.0),
+            balance,
+            nonce,
+            state_root: hex::encode(root.0),
+            proof_version: "blake3-merkle-v1".into(),
+            proof: merkle_proof_to_dto(&proof),
+        })
+    }
 }
 
 // ── LiveConsensusBackend ─────────────────────────────────────────────────
@@ -412,6 +535,10 @@ pub struct LiveConsensusBackend {
     /// Snapshot provider for building staking validator views.
     snapshot_provider:
         Option<Arc<dyn Fn() -> Option<crate::staking_snapshot::StakingSnapshot> + Send + Sync>>,
+    /// Number of active execution shards.
+    num_shards: u16,
+    /// Whether this node is in devnet mode (enables admin actions).
+    devnet_mode: bool,
 }
 
 impl LiveConsensusBackend {
@@ -423,7 +550,21 @@ impl LiveConsensusBackend {
             store: None,
             rotation_policy: None,
             snapshot_provider: None,
+            num_shards: 1,
+            devnet_mode: false,
         }
+    }
+
+    /// Set the number of active execution shards.
+    pub fn with_num_shards(mut self, n: u16) -> Self {
+        self.num_shards = n;
+        self
+    }
+
+    /// Enable devnet admin actions (e.g. manual epoch advance).
+    pub fn with_devnet_mode(mut self, enabled: bool) -> Self {
+        self.devnet_mode = enabled;
+        self
     }
 
     /// Attach an epoch manager to enable epoch-aware responses.
@@ -679,6 +820,112 @@ impl ConsensusBackend for LiveConsensusBackend {
             total_effective_stake,
         })
     }
+
+    fn shard_topology(&self) -> RpcResult<nexus_rpc::dto::ShardTopologyDto> {
+        let engine = self
+            .engine
+            .lock()
+            .map_err(|_| RpcError::Internal("consensus lock poisoned".into()))?;
+
+        // Build per-shard validator assignments from the committee.
+        let n = self.num_shards;
+        let mut shard_validators: Vec<Vec<u32>> = vec![Vec::new(); n as usize];
+        for v in engine.committee().active_validators() {
+            let sid = v.shard_id.map_or(0u16, |s| s.0);
+            if (sid as usize) < shard_validators.len() {
+                shard_validators[sid as usize].push(v.index.0);
+            }
+        }
+
+        let shards = shard_validators
+            .into_iter()
+            .enumerate()
+            .map(|(i, validators)| nexus_rpc::dto::ShardInfoDto {
+                shard_id: i as u16,
+                validators,
+            })
+            .collect();
+
+        Ok(nexus_rpc::dto::ShardTopologyDto {
+            num_shards: n,
+            shards,
+        })
+    }
+
+    fn shard_chain_head(&self, shard_id: u16) -> RpcResult<nexus_rpc::dto::ShardChainHeadDto> {
+        if shard_id >= self.num_shards && self.num_shards > 0 {
+            return Err(RpcError::NotFound(format!(
+                "shard {shard_id} does not exist (num_shards={})",
+                self.num_shards
+            )));
+        }
+
+        let engine = self
+            .engine
+            .lock()
+            .map_err(|_| RpcError::Internal("consensus lock poisoned".into()))?;
+
+        // The consensus engine tracks a single global sequence; per-shard
+        // head tracking requires the execution bridge.  Return the global
+        // head attributed to the requested shard.
+        let epoch = engine.epoch().0;
+        let sequence = engine.total_commits();
+
+        Ok(nexus_rpc::dto::ShardChainHeadDto {
+            shard_id,
+            sequence,
+            anchor_digest: "00".repeat(32),
+            epoch,
+        })
+    }
+
+    fn advance_epoch(&self, reason: &str) -> RpcResult<nexus_rpc::dto::EpochAdvanceResponse> {
+        if !self.devnet_mode {
+            return Err(RpcError::Unavailable(
+                "manual epoch advance is restricted to devnet mode".into(),
+            ));
+        }
+
+        tracing::info!(reason, "manual epoch advance requested via admin API");
+
+        let mut engine = self
+            .engine
+            .lock()
+            .map_err(|_| RpcError::Internal("consensus lock poisoned".into()))?;
+
+        let trigger = nexus_consensus::types::EpochTransitionTrigger::Manual;
+        let next_committee = engine.committee().clone();
+        let (transition, _flushed) = engine.advance_epoch(next_committee, trigger);
+
+        // Record transition in the epoch manager if attached.
+        if let Some(ref mgr) = self.epoch_manager {
+            if let Ok(mut mgr) = mgr.lock() {
+                mgr.record_transition(transition.clone());
+            }
+        }
+
+        // Persist to storage if available.
+        if let Some(ref store) = self.store {
+            let committee = engine.committee().clone();
+            drop(engine); // release lock before IO
+            if let Err(e) =
+                crate::epoch_store::persist_epoch_transition(store, &committee, &transition)
+            {
+                tracing::warn!(error = %e, "advance_epoch: failed to persist transition");
+            }
+        }
+
+        Ok(nexus_rpc::dto::EpochAdvanceResponse {
+            transition: nexus_rpc::dto::EpochTransitionDto {
+                from_epoch: transition.from_epoch,
+                to_epoch: transition.to_epoch,
+                trigger: format!("{:?}", transition.trigger),
+                final_commit_count: transition.final_commit_count,
+                transitioned_at: transition.transitioned_at,
+            },
+            new_epoch: transition.to_epoch,
+        })
+    }
 }
 
 // ── LiveIntentBackend ────────────────────────────────────────────────────
@@ -865,14 +1112,9 @@ impl McpDispatchBackend {
                 result.total_count = result.records.len() as u64;
                 result
             }
-            ProvenanceFilter::ByTransaction { tx_hash } => {
-                let mut result = self.session_provenance.provenance_activity_feed(&params);
-                result
-                    .records
-                    .retain(|record| record.tx_hash.as_ref() == Some(tx_hash));
-                result.total_count = result.records.len() as u64;
-                result
-            }
+            ProvenanceFilter::ByTransaction { tx_hash } => self
+                .session_provenance
+                .query_provenance_by_tx_hash(tx_hash, &params),
         };
 
         let payload = Self::json_payload(&result)?;
@@ -1097,6 +1339,22 @@ impl<S: StateStorage + Send + Sync + 'static> nexus_rpc::SessionProvenanceBacken
     fn list_anchor_receipts(&self, limit: u32) -> Vec<nexus_intent::AnchorReceipt> {
         self.provenance_store.list_anchor_receipts(limit)
     }
+
+    fn query_provenance_by_tx_hash(
+        &self,
+        tx_hash: &nexus_primitives::Blake3Digest,
+        params: &nexus_intent::agent_core::provenance::ProvenanceQueryParams,
+    ) -> nexus_intent::agent_core::provenance::ProvenanceQueryResult {
+        self.provenance_store.query_by_tx_hash(tx_hash, params)
+    }
+
+    fn query_provenance_by_status(
+        &self,
+        status: nexus_intent::agent_core::provenance::ProvenanceStatus,
+        params: &nexus_intent::agent_core::provenance::ProvenanceQueryParams,
+    ) -> nexus_intent::agent_core::provenance::ProvenanceQueryResult {
+        self.provenance_store.query_by_status(status, params)
+    }
 }
 
 // ── State proof backend ─────────────────────────────────────────────────
@@ -1161,7 +1419,341 @@ impl nexus_rpc::StateProofBackend for LiveStateProofBackend {
     }
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────
+// ── StorageBlockBackend ──────────────────────────────────────────────────
+
+/// [`BlockBackend`] adapter backed by RocksDB column families.
+///
+/// Reads committed batch metadata from `cf_blocks` (BCS `CommittedBatch`),
+/// transaction digest indexes from `cf_block_tx_index`, and individual
+/// receipts from `cf_receipts`.
+pub struct StorageBlockBackend<S: StateStorage> {
+    store: S,
+    chain_head: SharedChainHead,
+}
+
+impl<S: StateStorage> StorageBlockBackend<S> {
+    /// Create a new block query backend.
+    pub fn new(store: S, chain_head: SharedChainHead) -> Self {
+        Self { store, chain_head }
+    }
+
+    /// Load the `CommittedBatch` for a given sequence number from `cf_blocks`.
+    fn load_batch(&self, seq: u64) -> RpcResult<nexus_consensus::types::CommittedBatch> {
+        let key = seq.to_be_bytes().to_vec();
+        let raw = self
+            .store
+            .get_sync(ColumnFamily::Blocks.as_str(), &key)
+            .map_err(|e| RpcError::Internal(format!("storage error: {e}")))?;
+
+        match raw {
+            Some(bytes) => bcs::from_bytes(&bytes)
+                .map_err(|e| RpcError::Internal(format!("block decode error: {e}"))),
+            None => Err(RpcError::NotFound(format!("block {seq} not found"))),
+        }
+    }
+
+    /// Load the list of transaction digests for a block from `cf_block_tx_index`.
+    fn load_tx_digests(&self, seq: u64) -> RpcResult<Vec<nexus_primitives::Blake3Digest>> {
+        let key = seq.to_be_bytes().to_vec();
+        let raw = self
+            .store
+            .get_sync(ColumnFamily::BlockTxIndex.as_str(), &key)
+            .map_err(|e| RpcError::Internal(format!("storage error: {e}")))?;
+
+        match raw {
+            Some(bytes) => bcs::from_bytes(&bytes)
+                .map_err(|e| RpcError::Internal(format!("tx index decode error: {e}"))),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    /// Load a single receipt from `cf_receipts`.
+    fn load_receipt(
+        &self,
+        digest: &nexus_primitives::Blake3Digest,
+    ) -> RpcResult<Option<nexus_execution::types::TransactionReceipt>> {
+        let raw = self
+            .store
+            .get_sync(ColumnFamily::Receipts.as_str(), &digest.0)
+            .map_err(|e| RpcError::Internal(format!("storage error: {e}")))?;
+
+        match raw {
+            Some(bytes) => {
+                let receipt = serde_json::from_slice(&bytes)
+                    .map_err(|e| RpcError::Internal(format!("receipt decode error: {e}")))?;
+                Ok(Some(receipt))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Build a `BlockHeaderDto` from a `CommittedBatch` plus receipt data.
+    fn build_header(
+        &self,
+        batch: &nexus_consensus::types::CommittedBatch,
+        tx_count: usize,
+        gas_total: u64,
+    ) -> BlockHeaderDto {
+        // Try to get state_root and epoch from the shared chain head if this
+        // is the latest block; otherwise use zeros as placeholder.
+        let (state_root, epoch) = self
+            .chain_head
+            .get()
+            .filter(|h| h.sequence == batch.sequence.0)
+            .map(|h| (h.state_root, h.epoch))
+            .unwrap_or_else(|| ("0".repeat(64), 0));
+
+        BlockHeaderDto {
+            sequence: batch.sequence.0,
+            anchor_digest: hex::encode(batch.anchor.0),
+            state_root,
+            epoch,
+            cert_count: batch.certificates.len(),
+            tx_count,
+            gas_total,
+            committed_at_ms: batch.committed_at.0,
+        }
+    }
+}
+
+impl<S: StateStorage> BlockBackend for StorageBlockBackend<S> {
+    fn block_header(&self, seq: u64) -> RpcResult<BlockHeaderDto> {
+        let batch = self.load_batch(seq)?;
+        let digests = self.load_tx_digests(seq)?;
+
+        // Sum gas from receipts.
+        let mut gas_total = 0u64;
+        for d in &digests {
+            if let Some(r) = self.load_receipt(d)? {
+                gas_total += r.gas_used;
+            }
+        }
+
+        Ok(self.build_header(&batch, digests.len(), gas_total))
+    }
+
+    fn block_full(&self, seq: u64) -> RpcResult<BlockDto> {
+        let batch = self.load_batch(seq)?;
+        let digests = self.load_tx_digests(seq)?;
+
+        let mut transactions = Vec::with_capacity(digests.len());
+        let mut gas_total = 0u64;
+
+        for d in &digests {
+            if let Some(r) = self.load_receipt(d)? {
+                gas_total += r.gas_used;
+                let dto: TransactionReceiptDto = r.into();
+                transactions.push(nexus_rpc::TxSummaryDto {
+                    tx_digest: hex::encode(d.0),
+                    gas_used: dto.gas_used,
+                    status: dto.status,
+                });
+            }
+        }
+
+        Ok(BlockDto {
+            header: self.build_header(&batch, transactions.len(), gas_total),
+            transactions,
+        })
+    }
+
+    fn block_receipts(&self, seq: u64) -> RpcResult<BlockReceiptsDto> {
+        // Ensure block exists.
+        let _ = self.load_batch(seq)?;
+        let digests = self.load_tx_digests(seq)?;
+
+        let mut receipts = Vec::with_capacity(digests.len());
+        let mut total_gas = 0u64;
+
+        for d in &digests {
+            if let Some(r) = self.load_receipt(d)? {
+                total_gas += r.gas_used;
+                receipts.push(r.into());
+            }
+        }
+
+        Ok(BlockReceiptsDto {
+            block_seq: seq,
+            receipts,
+            total_gas,
+        })
+    }
+
+    fn block_zk_proof(&self, seq: u64) -> RpcResult<ZkProofDto> {
+        // Ensure block exists.
+        let _ = self.load_batch(seq)?;
+        Err(RpcError::Unavailable("ZK proofs not yet available".into()))
+    }
+}
+
+// ── StorageEventBackend ──────────────────────────────────────────────────
+
+/// BCS-encoded event value stored in the primary (`e:`) key of `cf_events`.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct StoredEvent {
+    pub emitter: AccountAddress,
+    pub type_tag: String,
+    pub sequence_number: u64,
+    pub data: Vec<u8>,
+    pub tx_digest: [u8; 32],
+    pub block_seq: u64,
+    pub timestamp_ms: u64,
+}
+
+/// [`EventBackend`] adapter backed by the `cf_events` column family.
+///
+/// Supports three query modes via the multi-key design:
+/// - **All events** — scans the primary `e:` prefix range.
+/// - **By contract** — scans the `c:<emitter>` prefix.
+/// - **By type** — scans the `t:<type_hash>` prefix.
+pub struct StorageEventBackend<S: StateStorage> {
+    store: S,
+}
+
+impl<S: StateStorage> StorageEventBackend<S> {
+    /// Create a new event query backend.
+    pub fn new(store: S) -> Self {
+        Self { store }
+    }
+
+    /// Scan the Events CF using a prefix, returning up to `limit` primary
+    /// event values. For secondary keys (`c:`, `t:`), we decode the embedded
+    /// primary key coordinates and load from the primary `e:` key.
+    fn scan_events(
+        &self,
+        prefix: &[u8],
+        limit: u32,
+        after_seq: Option<u64>,
+        before_seq: Option<u64>,
+    ) -> RpcResult<Vec<StoredEvent>> {
+        let cf = ColumnFamily::Events.as_str();
+
+        // Build scan end bound: prefix + 0xFF…
+        let mut end = prefix.to_vec();
+        end.push(0xFF);
+
+        let pairs = self
+            .store
+            .scan(cf, prefix, &end)
+            .map_err(|e| RpcError::Internal(format!("event scan error: {e}")))?;
+
+        let is_primary = prefix.first() == Some(&b'e');
+        let mut results = Vec::new();
+
+        for (key, value) in pairs {
+            if results.len() >= limit as usize {
+                break;
+            }
+
+            let event: StoredEvent = if is_primary {
+                bcs::from_bytes(&value)
+                    .map_err(|e| RpcError::Internal(format!("event decode: {e}")))?
+            } else {
+                // Secondary key — extract block_seq and event_seq, then look up primary.
+                // c: layout = [1B prefix][32B addr][8B block_seq][4B event_seq]
+                // t: layout = [1B prefix][32B hash][8B block_seq][4B event_seq]
+                if key.len() < 45 {
+                    continue;
+                }
+                let block_seq = u64::from_be_bytes(key[33..41].try_into().expect("8 bytes"));
+                let event_seq = u32::from_be_bytes(key[41..45].try_into().expect("4 bytes"));
+                // We need the tx_index to form the primary key, but secondary
+                // keys don't store it. The value of secondary keys encodes
+                // the tx_index as 4-byte BE.
+                if value.len() < 4 {
+                    continue;
+                }
+                let tx_index = u32::from_be_bytes(value[..4].try_into().expect("4 bytes"));
+                let primary_key = nexus_storage::EventKey::primary(
+                    CommitSequence(block_seq),
+                    tx_index,
+                    event_seq,
+                );
+                let raw = self
+                    .store
+                    .get_sync(cf, &primary_key)
+                    .map_err(|e| RpcError::Internal(format!("event lookup: {e}")))?;
+                match raw {
+                    Some(bytes) => bcs::from_bytes(&bytes)
+                        .map_err(|e| RpcError::Internal(format!("event decode: {e}")))?,
+                    None => continue,
+                }
+            };
+
+            // Apply block sequence filters.
+            if let Some(after) = after_seq {
+                if event.block_seq <= after {
+                    continue;
+                }
+            }
+            if let Some(before) = before_seq {
+                if event.block_seq >= before {
+                    continue;
+                }
+            }
+
+            results.push(event);
+        }
+
+        Ok(results)
+    }
+}
+
+impl<S: StateStorage> nexus_rpc::EventBackend for StorageEventBackend<S> {
+    fn query_events(
+        &self,
+        contract: Option<&AccountAddress>,
+        event_type: Option<&str>,
+        after_seq: Option<u64>,
+        before_seq: Option<u64>,
+        limit: u32,
+        _cursor: Option<&str>,
+    ) -> RpcResult<nexus_rpc::dto::EventQueryResponse> {
+        // Choose scan prefix based on filter.
+        let prefix = if let Some(addr) = contract {
+            nexus_storage::EventKey::contract_prefix(addr)
+        } else if let Some(type_tag) = event_type {
+            let hash = nexus_primitives::Blake3Digest::from_bytes(
+                blake3::hash(type_tag.as_bytes()).into(),
+            );
+            nexus_storage::EventKey::type_prefix(&hash)
+        } else {
+            nexus_storage::EventKey::primary_prefix().to_vec()
+        };
+
+        // Fetch one extra to detect has_more.
+        let events = self.scan_events(&prefix, limit + 1, after_seq, before_seq)?;
+        let has_more = events.len() > limit as usize;
+        let page: Vec<_> = events.into_iter().take(limit as usize).collect();
+
+        let next_cursor = if has_more {
+            page.last()
+                .map(|e| format!("{}:{}", e.block_seq, e.sequence_number))
+        } else {
+            None
+        };
+
+        let dtos = page
+            .into_iter()
+            .map(|e| nexus_rpc::dto::ContractEventDto {
+                emitter: hex::encode(e.emitter.0),
+                event_type: e.type_tag,
+                sequence_number: e.sequence_number,
+                data_hex: hex::encode(&e.data),
+                data_json: None,
+                tx_digest: hex::encode(e.tx_digest),
+                block_seq: e.block_seq,
+                timestamp_ms: e.timestamp_ms,
+            })
+            .collect();
+
+        Ok(nexus_rpc::dto::EventQueryResponse {
+            events: dtos,
+            next_cursor,
+            has_more,
+        })
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1250,6 +1842,7 @@ mod tests {
             status: ExecutionStatus::Success,
             gas_used: 5_000,
             state_changes: vec![],
+            events: vec![],
             timestamp: TimestampMs(1_700_000_000_000),
         };
         let store = store_with_receipt(&receipt);
@@ -1451,5 +2044,152 @@ mod tests {
         let result = IntentBackend::estimate_gas(&backend, intent);
         let gas = result.await;
         assert!(gas.is_ok() || gas.is_err());
+    }
+
+    // ── StorageBlockBackend tests ───────────────────────────────────
+
+    fn make_block_backend(store: MemoryStore) -> StorageBlockBackend<MemoryStore> {
+        StorageBlockBackend::new(store, SharedChainHead::default())
+    }
+
+    fn store_committed_batch(store: &MemoryStore, seq: u64) {
+        let batch = nexus_consensus::types::CommittedBatch {
+            anchor: Blake3Digest([0xAA; 32]),
+            certificates: vec![Blake3Digest([0xBB; 32]), Blake3Digest([0xCC; 32])],
+            sequence: CommitSequence(seq),
+            committed_at: TimestampMs(1_700_000_000_000),
+        };
+        let encoded = bcs::to_bytes(&batch).unwrap();
+        let mut wb = store.new_batch();
+        wb.put_cf(
+            ColumnFamily::Blocks.as_str(),
+            seq.to_be_bytes().to_vec(),
+            encoded,
+        );
+        futures::executor::block_on(store.write_batch(wb)).unwrap();
+    }
+
+    fn store_tx_index(store: &MemoryStore, seq: u64, digests: &[Blake3Digest]) {
+        let encoded = bcs::to_bytes(&digests.to_vec()).unwrap();
+        let mut wb = store.new_batch();
+        wb.put_cf(
+            ColumnFamily::BlockTxIndex.as_str(),
+            seq.to_be_bytes().to_vec(),
+            encoded,
+        );
+        futures::executor::block_on(store.write_batch(wb)).unwrap();
+    }
+
+    fn store_receipt(store: &MemoryStore, receipt: &TransactionReceipt) {
+        let mut wb = store.new_batch();
+        wb.put_cf(
+            ColumnFamily::Receipts.as_str(),
+            receipt.tx_digest.0.to_vec(),
+            serde_json::to_vec(receipt).unwrap(),
+        );
+        futures::executor::block_on(store.write_batch(wb)).unwrap();
+    }
+
+    #[test]
+    fn block_header_from_storage() {
+        let store = MemoryStore::new();
+        let tx_digest = Blake3Digest([0xDD; 32]);
+        let receipt = TransactionReceipt {
+            tx_digest,
+            commit_seq: CommitSequence(1),
+            shard_id: ShardId(0),
+            status: ExecutionStatus::Success,
+            gas_used: 3_000,
+            state_changes: vec![],
+            events: vec![],
+            timestamp: TimestampMs(1_700_000_000_000),
+        };
+
+        store_committed_batch(&store, 1);
+        store_tx_index(&store, 1, &[tx_digest]);
+        store_receipt(&store, &receipt);
+
+        let backend = make_block_backend(store);
+        let header = BlockBackend::block_header(&backend, 1).unwrap();
+        assert_eq!(header.sequence, 1);
+        assert_eq!(header.tx_count, 1);
+        assert_eq!(header.gas_total, 3_000);
+        assert_eq!(header.cert_count, 2);
+    }
+
+    #[test]
+    fn block_full_from_storage() {
+        let store = MemoryStore::new();
+        let tx_digest = Blake3Digest([0xDD; 32]);
+        let receipt = TransactionReceipt {
+            tx_digest,
+            commit_seq: CommitSequence(1),
+            shard_id: ShardId(0),
+            status: ExecutionStatus::Success,
+            gas_used: 2_500,
+            state_changes: vec![],
+            events: vec![],
+            timestamp: TimestampMs(1_700_000_000_000),
+        };
+
+        store_committed_batch(&store, 1);
+        store_tx_index(&store, 1, &[tx_digest]);
+        store_receipt(&store, &receipt);
+
+        let backend = make_block_backend(store);
+        let block = BlockBackend::block_full(&backend, 1).unwrap();
+        assert_eq!(block.header.sequence, 1);
+        assert_eq!(block.transactions.len(), 1);
+        assert_eq!(block.transactions[0].gas_used, 2_500);
+    }
+
+    #[test]
+    fn block_receipts_from_storage() {
+        let store = MemoryStore::new();
+        let d1 = Blake3Digest([0xD1; 32]);
+        let d2 = Blake3Digest([0xD2; 32]);
+        let r1 = TransactionReceipt {
+            tx_digest: d1,
+            commit_seq: CommitSequence(1),
+            shard_id: ShardId(0),
+            status: ExecutionStatus::Success,
+            gas_used: 1_000,
+            state_changes: vec![],
+            events: vec![],
+            timestamp: TimestampMs(1_700_000_000_000),
+        };
+        let r2 = TransactionReceipt {
+            tx_digest: d2,
+            commit_seq: CommitSequence(1),
+            shard_id: ShardId(0),
+            status: ExecutionStatus::OutOfGas,
+            gas_used: 4_000,
+            state_changes: vec![],
+            events: vec![],
+            timestamp: TimestampMs(1_700_000_000_000),
+        };
+
+        store_committed_batch(&store, 1);
+        store_tx_index(&store, 1, &[d1, d2]);
+        store_receipt(&store, &r1);
+        store_receipt(&store, &r2);
+
+        let backend = make_block_backend(store);
+        let rec = BlockBackend::block_receipts(&backend, 1).unwrap();
+        assert_eq!(rec.block_seq, 1);
+        assert_eq!(rec.receipts.len(), 2);
+        assert_eq!(rec.total_gas, 5_000);
+    }
+
+    #[test]
+    fn block_not_found_in_storage() {
+        let store = MemoryStore::new();
+        let backend = make_block_backend(store);
+        let result = BlockBackend::block_header(&backend, 999);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            RpcError::NotFound(msg) => assert!(msg.contains("999")),
+            other => panic!("expected NotFound, got {other:?}"),
+        }
     }
 }

@@ -129,6 +129,8 @@ mod tests {
             num_shards: 1,
             tx_lifecycle: None,
             htlc: None,
+            block: None,
+            event_backend: None,
         })
     }
 

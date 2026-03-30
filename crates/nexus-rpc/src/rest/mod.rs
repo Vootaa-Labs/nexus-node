@@ -36,9 +36,11 @@
 /// | GET | `/v2/provenance/:digest` | Retrieve provenance record by ID |
 /// | GET | `/v2/provenance` | Query provenance feed (agent, session, or all) |
 pub mod account;
+pub mod block;
 pub mod chain;
 pub mod consensus;
 pub mod contract;
+pub mod events;
 pub mod faucet;
 pub mod health;
 pub mod htlc;
@@ -126,6 +128,10 @@ pub struct AppState {
     pub tx_lifecycle: Option<Arc<crate::tx_lifecycle::TxLifecycleRegistry>>,
     /// HTLC query backend (optional — `None` if HTLC tracking is unavailable).
     pub htlc: Option<Arc<dyn HtlcBackend>>,
+    /// Block query backend (optional — `None` if block queries are unavailable).
+    pub block: Option<Arc<dyn BlockBackend>>,
+    /// Event query backend (optional — `None` if event indexing is unavailable).
+    pub event_backend: Option<Arc<dyn EventBackend>>,
 }
 
 /// Abstraction over account/transaction queries.
@@ -168,6 +174,16 @@ pub trait QueryBackend: Send + Sync + 'static {
         _amount: u64,
     ) -> Result<(), RpcError> {
         Err(RpcError::Unavailable("faucet not implemented".into()))
+    }
+
+    /// Return account state with Merkle inclusion proof.
+    fn account_state_proof(
+        &self,
+        _addr: &nexus_primitives::AccountAddress,
+    ) -> RpcResult<crate::dto::AccountStateProofDto> {
+        Err(RpcError::Unavailable(
+            "account state proof not available".into(),
+        ))
     }
 }
 
@@ -327,6 +343,20 @@ pub trait SessionProvenanceBackend: Send + Sync + 'static {
 
     /// List anchor receipts in batch-sequence order.
     fn list_anchor_receipts(&self, limit: u32) -> Vec<nexus_intent::AnchorReceipt>;
+
+    /// Query provenance records by transaction hash.
+    fn query_provenance_by_tx_hash(
+        &self,
+        tx_hash: &nexus_primitives::Blake3Digest,
+        params: &nexus_intent::agent_core::provenance::ProvenanceQueryParams,
+    ) -> nexus_intent::agent_core::provenance::ProvenanceQueryResult;
+
+    /// Query provenance records by status.
+    fn query_provenance_by_status(
+        &self,
+        status: nexus_intent::agent_core::provenance::ProvenanceStatus,
+        params: &nexus_intent::agent_core::provenance::ProvenanceQueryParams,
+    ) -> nexus_intent::agent_core::provenance::ProvenanceQueryResult;
 }
 
 /// Abstraction over state proof and commitment queries.
@@ -359,6 +389,38 @@ pub trait HtlcBackend: Send + Sync + 'static {
     fn list_pending_htlc_locks(&self, limit: u32) -> RpcResult<crate::dto::HtlcPendingListDto>;
 }
 
+/// Abstraction over block and receipt queries (v0.1.15).
+pub trait BlockBackend: Send + Sync + 'static {
+    /// Return block header by commit sequence.
+    fn block_header(&self, seq: u64) -> RpcResult<crate::dto::BlockHeaderDto>;
+
+    /// Return full block content by commit sequence.
+    fn block_full(&self, seq: u64) -> RpcResult<crate::dto::BlockDto>;
+
+    /// Return batch receipts for a block.
+    fn block_receipts(&self, seq: u64) -> RpcResult<crate::dto::BlockReceiptsDto>;
+
+    /// Return ZK proof for a block (501 until prover lands).
+    fn block_zk_proof(&self, seq: u64) -> RpcResult<crate::dto::ZkProofDto> {
+        let _ = seq;
+        Err(RpcError::Unavailable("ZK proofs not yet available".into()))
+    }
+}
+
+/// Abstraction over contract event queries (v0.1.15).
+pub trait EventBackend: Send + Sync + 'static {
+    /// Query contract events with optional filters and pagination.
+    fn query_events(
+        &self,
+        contract: Option<&nexus_primitives::AccountAddress>,
+        event_type: Option<&str>,
+        after_seq: Option<u64>,
+        before_seq: Option<u64>,
+        limit: u32,
+        cursor: Option<&str>,
+    ) -> RpcResult<crate::dto::EventQueryResponse>;
+}
+
 /// Build the REST API router.
 ///
 /// The returned [`Router`] should be composed into the top-level server.
@@ -381,6 +443,8 @@ pub fn rest_router(state: Arc<AppState>) -> Router {
         .merge(proof::router())
         .merge(shard::router())
         .merge(htlc::router())
+        .merge(block::router())
+        .merge(events::router())
         .merge(crate::ws::router())
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -516,6 +580,8 @@ pub(crate) mod test_helpers {
             num_shards: 1,
             tx_lifecycle: None,
             htlc: None,
+            block: None,
+            event_backend: None,
         })
     }
 
@@ -546,6 +612,8 @@ pub(crate) mod test_helpers {
             num_shards: 1,
             tx_lifecycle: None,
             htlc: None,
+            block: None,
+            event_backend: None,
         })
     }
 
@@ -643,6 +711,8 @@ pub(crate) mod test_helpers {
             num_shards: 1,
             tx_lifecycle: None,
             htlc: None,
+            block: None,
+            event_backend: None,
         })
     }
 
@@ -756,6 +826,8 @@ pub(crate) mod test_helpers {
             num_shards: 1,
             tx_lifecycle: None,
             htlc: None,
+            block: None,
+            event_backend: None,
         })
     }
 
@@ -830,6 +902,401 @@ pub(crate) mod test_helpers {
             num_shards: 1,
             tx_lifecycle: None,
             htlc: None,
+            block: None,
+            event_backend: None,
+        })
+    }
+
+    // ── Mock block backend ──────────────────────────────────────────────
+
+    /// Mock block backend for testing.
+    pub struct MockBlockBackend {
+        pub headers: Mutex<HashMap<u64, crate::dto::BlockHeaderDto>>,
+        pub blocks: Mutex<HashMap<u64, crate::dto::BlockDto>>,
+        pub receipts: Mutex<HashMap<u64, crate::dto::BlockReceiptsDto>>,
+    }
+
+    impl MockBlockBackend {
+        pub fn new() -> Self {
+            Self {
+                headers: Mutex::new(HashMap::new()),
+                blocks: Mutex::new(HashMap::new()),
+                receipts: Mutex::new(HashMap::new()),
+            }
+        }
+
+        pub fn with_header(self, seq: u64, header: crate::dto::BlockHeaderDto) -> Self {
+            self.headers
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(seq, header);
+            self
+        }
+
+        pub fn with_block(self, seq: u64, block: crate::dto::BlockDto) -> Self {
+            self.blocks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(seq, block);
+            self
+        }
+
+        pub fn with_receipts(self, seq: u64, receipts: crate::dto::BlockReceiptsDto) -> Self {
+            self.receipts
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(seq, receipts);
+            self
+        }
+    }
+
+    impl BlockBackend for MockBlockBackend {
+        fn block_header(&self, seq: u64) -> RpcResult<crate::dto::BlockHeaderDto> {
+            self.headers
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&seq)
+                .cloned()
+                .ok_or_else(|| RpcError::NotFound(format!("block {seq} not found")))
+        }
+
+        fn block_full(&self, seq: u64) -> RpcResult<crate::dto::BlockDto> {
+            self.blocks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&seq)
+                .cloned()
+                .ok_or_else(|| RpcError::NotFound(format!("block {seq} not found")))
+        }
+
+        fn block_receipts(&self, seq: u64) -> RpcResult<crate::dto::BlockReceiptsDto> {
+            self.receipts
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&seq)
+                .cloned()
+                .ok_or_else(|| RpcError::NotFound(format!("block {seq} not found")))
+        }
+    }
+
+    /// Create test app state with a mock block backend.
+    pub fn mock_state_with_block(backend: MockBlockBackend) -> Arc<AppState> {
+        Arc::new(AppState {
+            query: Arc::new(MockQueryBackend::new()),
+            intent: None,
+            consensus: None,
+            network: None,
+            broadcaster: None,
+            events: None,
+            rate_limiter: None,
+            faucet_addr_limiter: None,
+            metrics_handle: None,
+            faucet_enabled: false,
+            faucet_amount: 0,
+            max_ws_connections: 100,
+            ws_connection_count: std::sync::atomic::AtomicUsize::new(0),
+            intent_tracker: None,
+            session_provenance: None,
+            state_proof: None,
+            mcp_dispatcher: None,
+            mcp_call_index: std::sync::atomic::AtomicU64::new(0),
+            quota_manager: None,
+            query_gas_budget: 10_000_000,
+            query_timeout_ms: 5_000,
+            num_shards: 1,
+            tx_lifecycle: None,
+            htlc: None,
+            block: Some(Arc::new(backend)),
+            event_backend: None,
+        })
+    }
+
+    // ── Mock event backend ──────────────────────────────────────────────
+
+    /// Mock event backend for testing.
+    pub struct MockEventBackend {
+        pub response: Mutex<Option<crate::dto::EventQueryResponse>>,
+    }
+
+    impl MockEventBackend {
+        pub fn new() -> Self {
+            Self {
+                response: Mutex::new(None),
+            }
+        }
+
+        pub fn with_response(self, response: crate::dto::EventQueryResponse) -> Self {
+            *self.response.lock().unwrap_or_else(|e| e.into_inner()) = Some(response);
+            self
+        }
+    }
+
+    impl EventBackend for MockEventBackend {
+        fn query_events(
+            &self,
+            _contract: Option<&AccountAddress>,
+            _event_type: Option<&str>,
+            _after_seq: Option<u64>,
+            _before_seq: Option<u64>,
+            _limit: u32,
+            _cursor: Option<&str>,
+        ) -> RpcResult<crate::dto::EventQueryResponse> {
+            self.response
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+                .ok_or_else(|| RpcError::Internal("no mock response configured".into()))
+        }
+    }
+
+    /// Create test app state with a mock event backend.
+    pub fn mock_state_with_events(backend: MockEventBackend) -> Arc<AppState> {
+        Arc::new(AppState {
+            query: Arc::new(MockQueryBackend::new()),
+            intent: None,
+            consensus: None,
+            network: None,
+            broadcaster: None,
+            events: None,
+            rate_limiter: None,
+            faucet_addr_limiter: None,
+            metrics_handle: None,
+            faucet_enabled: false,
+            faucet_amount: 0,
+            max_ws_connections: 100,
+            ws_connection_count: std::sync::atomic::AtomicUsize::new(0),
+            intent_tracker: None,
+            session_provenance: None,
+            state_proof: None,
+            mcp_dispatcher: None,
+            mcp_call_index: std::sync::atomic::AtomicU64::new(0),
+            quota_manager: None,
+            query_gas_budget: 10_000_000,
+            query_timeout_ms: 5_000,
+            num_shards: 1,
+            tx_lifecycle: None,
+            htlc: None,
+            block: None,
+            event_backend: Some(Arc::new(backend)),
+        })
+    }
+
+    // ── Mock session/provenance backend ─────────────────────────────────
+
+    /// Mock session and provenance backend for testing.
+    pub struct MockSessionProvenanceBackend {
+        pub sessions: Mutex<Vec<nexus_intent::AgentSession>>,
+        pub provenance_records: Mutex<Vec<nexus_intent::ProvenanceRecord>>,
+    }
+
+    impl MockSessionProvenanceBackend {
+        pub fn new() -> Self {
+            Self {
+                sessions: Mutex::new(Vec::new()),
+                provenance_records: Mutex::new(Vec::new()),
+            }
+        }
+
+        pub fn with_session(self, session: nexus_intent::AgentSession) -> Self {
+            self.sessions
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(session);
+            self
+        }
+
+        pub fn with_provenance(self, record: nexus_intent::ProvenanceRecord) -> Self {
+            self.provenance_records
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(record);
+            self
+        }
+    }
+
+    impl SessionProvenanceBackend for MockSessionProvenanceBackend {
+        fn get_session(&self, session_id: &Blake3Digest) -> Option<nexus_intent::AgentSession> {
+            self.sessions
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .find(|s| s.session_id == *session_id)
+                .cloned()
+        }
+
+        fn active_sessions(&self) -> Vec<nexus_intent::AgentSession> {
+            self.sessions
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .filter(|s| !s.current_state.is_terminal())
+                .cloned()
+                .collect()
+        }
+
+        fn all_sessions(&self) -> Vec<nexus_intent::AgentSession> {
+            self.sessions
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+        }
+
+        fn get_provenance(
+            &self,
+            provenance_id: &Blake3Digest,
+        ) -> Option<nexus_intent::ProvenanceRecord> {
+            self.provenance_records
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .find(|r| r.provenance_id == *provenance_id)
+                .cloned()
+        }
+
+        fn query_provenance_by_agent(
+            &self,
+            agent: &AccountAddress,
+            _params: &nexus_intent::agent_core::provenance::ProvenanceQueryParams,
+        ) -> nexus_intent::agent_core::provenance::ProvenanceQueryResult {
+            let records: Vec<_> = self
+                .provenance_records
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .filter(|r| r.agent_id == *agent)
+                .cloned()
+                .collect();
+            let total_count = records.len() as u64;
+            nexus_intent::agent_core::provenance::ProvenanceQueryResult {
+                records,
+                total_count,
+                cursor: None,
+            }
+        }
+
+        fn query_provenance_by_session(
+            &self,
+            session_id: &Blake3Digest,
+            _params: &nexus_intent::agent_core::provenance::ProvenanceQueryParams,
+        ) -> nexus_intent::agent_core::provenance::ProvenanceQueryResult {
+            let records: Vec<_> = self
+                .provenance_records
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .filter(|r| r.session_id == *session_id)
+                .cloned()
+                .collect();
+            let total_count = records.len() as u64;
+            nexus_intent::agent_core::provenance::ProvenanceQueryResult {
+                records,
+                total_count,
+                cursor: None,
+            }
+        }
+
+        fn provenance_activity_feed(
+            &self,
+            _params: &nexus_intent::agent_core::provenance::ProvenanceQueryParams,
+        ) -> nexus_intent::agent_core::provenance::ProvenanceQueryResult {
+            let records = self
+                .provenance_records
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            let total_count = records.len() as u64;
+            nexus_intent::agent_core::provenance::ProvenanceQueryResult {
+                records,
+                total_count,
+                cursor: None,
+            }
+        }
+
+        fn get_anchor_receipt(
+            &self,
+            _anchor_digest: &Blake3Digest,
+        ) -> Option<nexus_intent::AnchorReceipt> {
+            None
+        }
+
+        fn list_anchor_receipts(&self, _limit: u32) -> Vec<nexus_intent::AnchorReceipt> {
+            Vec::new()
+        }
+
+        fn query_provenance_by_tx_hash(
+            &self,
+            tx_hash: &Blake3Digest,
+            _params: &nexus_intent::agent_core::provenance::ProvenanceQueryParams,
+        ) -> nexus_intent::agent_core::provenance::ProvenanceQueryResult {
+            let records: Vec<_> = self
+                .provenance_records
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .filter(|r| r.tx_hash.as_ref() == Some(tx_hash))
+                .cloned()
+                .collect();
+            let total_count = records.len() as u64;
+            nexus_intent::agent_core::provenance::ProvenanceQueryResult {
+                records,
+                total_count,
+                cursor: None,
+            }
+        }
+
+        fn query_provenance_by_status(
+            &self,
+            status: nexus_intent::agent_core::provenance::ProvenanceStatus,
+            _params: &nexus_intent::agent_core::provenance::ProvenanceQueryParams,
+        ) -> nexus_intent::agent_core::provenance::ProvenanceQueryResult {
+            let records: Vec<_> = self
+                .provenance_records
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .filter(|r| r.status == status)
+                .cloned()
+                .collect();
+            let total_count = records.len() as u64;
+            nexus_intent::agent_core::provenance::ProvenanceQueryResult {
+                records,
+                total_count,
+                cursor: None,
+            }
+        }
+    }
+
+    /// Create test app state with a mock session/provenance backend.
+    pub fn mock_state_with_session_provenance(
+        backend: MockSessionProvenanceBackend,
+    ) -> Arc<AppState> {
+        Arc::new(AppState {
+            query: Arc::new(MockQueryBackend::new()),
+            intent: None,
+            consensus: None,
+            network: None,
+            broadcaster: None,
+            events: None,
+            rate_limiter: None,
+            faucet_addr_limiter: None,
+            metrics_handle: None,
+            faucet_enabled: false,
+            faucet_amount: 0,
+            max_ws_connections: 100,
+            ws_connection_count: std::sync::atomic::AtomicUsize::new(0),
+            intent_tracker: None,
+            session_provenance: Some(Arc::new(backend)),
+            state_proof: None,
+            mcp_dispatcher: None,
+            mcp_call_index: std::sync::atomic::AtomicU64::new(0),
+            quota_manager: None,
+            query_gas_budget: 10_000_000,
+            query_timeout_ms: 5_000,
+            num_shards: 1,
+            tx_lifecycle: None,
+            htlc: None,
+            block: None,
+            event_backend: None,
         })
     }
 }

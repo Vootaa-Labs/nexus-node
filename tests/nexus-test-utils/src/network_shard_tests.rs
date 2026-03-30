@@ -359,6 +359,8 @@ mod tests {
             num_shards: 2,
             tx_lifecycle: None,
             htlc: None,
+            block: None,
+            event_backend: None,
         });
 
         let app = nexus_rpc::rest::rest_router(state);
@@ -485,6 +487,8 @@ mod tests {
             htlc: Some(Arc::new(MockHtlc {
                 lock_digest_hex: lock_digest_hex.clone(),
             })),
+            block: None,
+            event_backend: None,
         });
 
         let app = nexus_rpc::rest::rest_router(state);
