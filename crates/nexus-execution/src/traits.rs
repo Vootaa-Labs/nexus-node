@@ -105,7 +105,6 @@ mod tests {
     /// Exercise the default `contains()` implementation through a concrete type.
     #[test]
     fn default_contains_delegates_to_get() {
-        use crate::ExecutionError;
         use nexus_primitives::AccountAddress;
 
         struct MapView(std::collections::HashMap<Vec<u8>, Vec<u8>>);

@@ -107,8 +107,11 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::RwLock;
 
+    type TestStateKey = (nexus_primitives::AccountAddress, Vec<u8>);
+    type TestStateMap = HashMap<TestStateKey, Vec<u8>>;
+
     struct TestState {
-        data: RwLock<HashMap<(nexus_primitives::AccountAddress, Vec<u8>), Vec<u8>>>,
+        data: RwLock<TestStateMap>,
     }
 
     impl TestState {
