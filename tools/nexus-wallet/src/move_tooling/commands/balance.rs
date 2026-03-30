@@ -51,3 +51,41 @@ fn resolve_address(
 
     anyhow::bail!("either --address or --key-file must be provided")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_address_from_valid_hex() {
+        let hex = hex::encode([0u8; 32]);
+        let addr = resolve_address(Some(&hex), None).unwrap();
+        assert_eq!(addr.0, [0u8; 32]);
+    }
+
+    #[test]
+    fn resolve_address_errors_when_neither_provided() {
+        let err = resolve_address(None, None).unwrap_err();
+        assert!(err.to_string().contains("--address"));
+    }
+
+    #[test]
+    fn resolve_address_rejects_invalid_hex() {
+        let err = resolve_address(Some("not_hex!!"), None).unwrap_err();
+        assert!(
+            err.to_string().contains("decoding") || err.to_string().contains("hex"),
+            "unexpected: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn run_rejects_invalid_rpc_url() {
+        let args = BalanceArgs {
+            address: Some(hex::encode([0u8; 32])),
+            key_file: None,
+            rpc_url: "ws://bad".into(),
+        };
+        assert!(run(args).is_err());
+    }
+}

@@ -5,10 +5,19 @@
 # Usage: make <target>
 
 .PHONY: all check fmt clippy test test-vm test-all lint audit deny build release clean setup help
+.PHONY: coverage coverage-html coverage-json coverage-scorecard coverage-docs
 .PHONY: verify-test-fixtures compile-test-fixtures pre-push-fast pre-push
 
 # Default: full lint + test
 all: lint test
+
+WORKSPACE_VERSION := $(shell awk 'BEGIN { in_section = 0 } /^\[workspace\.package\]$$/ { in_section = 1; next } /^\[/ { in_section = 0 } in_section && $$1 == "version" { gsub(/"/, "", $$3); print $$3; exit }' Cargo.toml)
+COVERAGE_OUTPUT_DIR := target/llvm-cov
+COVERAGE_SUMMARY_JSON := $(COVERAGE_OUTPUT_DIR)/coverage-summary.json
+COVERAGE_SCORECARD_MD := $(COVERAGE_OUTPUT_DIR)/package-scorecard.md
+COVERAGE_SCORECARD_JSON := $(COVERAGE_OUTPUT_DIR)/package-scorecard.json
+COVERAGE_CI_SUMMARY_MD := $(COVERAGE_OUTPUT_DIR)/ci-summary.md
+COVERAGE_IGNORE_REGEX := (^|/)(vendor-src|target)/
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -94,13 +103,61 @@ test-all: nextest doctest test-kat
 
 ## Generate LCOV coverage report
 coverage:
-	cargo llvm-cov --workspace --lcov --output-path lcov.info
+	cargo llvm-cov --workspace --lcov --output-path lcov.info \
+		--ignore-filename-regex "$(COVERAGE_IGNORE_REGEX)"
 	@echo "Coverage report: lcov.info"
 
 ## Generate HTML coverage report
 coverage-html:
-	cargo llvm-cov --workspace --html
+	cargo llvm-cov --workspace --html \
+		--ignore-filename-regex "$(COVERAGE_IGNORE_REGEX)"
 	@echo "Coverage report: target/llvm-cov/html/index.html"
+
+## Generate machine-readable JSON coverage summary
+coverage-json:
+	@mkdir -p $(COVERAGE_OUTPUT_DIR)
+	cargo llvm-cov --workspace --json --summary-only \
+		--output-path $(COVERAGE_SUMMARY_JSON) \
+		--ignore-filename-regex "$(COVERAGE_IGNORE_REGEX)"
+	@echo "Coverage summary: $(COVERAGE_SUMMARY_JSON)"
+
+## Generate crate-level coverage scorecard from coverage summary JSON
+coverage-scorecard: coverage-json
+	python3 scripts/generate_coverage_scorecard.py \
+		--workspace-root . \
+		--summary-json $(COVERAGE_SUMMARY_JSON) \
+		--output-scorecard-md $(COVERAGE_SCORECARD_MD) \
+		--output-scorecard-json $(COVERAGE_SCORECARD_JSON)
+	python3 scripts/write_coverage_ci_summary.py \
+		--scorecard-json $(COVERAGE_SCORECARD_JSON) \
+		--output $(COVERAGE_CI_SUMMARY_MD)
+	@echo "Coverage scorecard: $(COVERAGE_SCORECARD_MD)"
+
+## Generate LCOV, HTML, JSON, scorecard, and refresh bilingual coverage docs without rerunning tests
+coverage-docs:
+	@mkdir -p $(COVERAGE_OUTPUT_DIR)
+	cargo llvm-cov --workspace --no-report \
+		--ignore-filename-regex "$(COVERAGE_IGNORE_REGEX)"
+	cargo llvm-cov report --lcov \
+		--output-path lcov.info \
+		--ignore-filename-regex "$(COVERAGE_IGNORE_REGEX)"
+	cargo llvm-cov report --html \
+		--output-dir $(COVERAGE_OUTPUT_DIR) \
+		--ignore-filename-regex "$(COVERAGE_IGNORE_REGEX)"
+	cargo llvm-cov report --json --summary-only \
+		--output-path $(COVERAGE_SUMMARY_JSON) \
+		--ignore-filename-regex "$(COVERAGE_IGNORE_REGEX)"
+	python3 scripts/generate_coverage_scorecard.py \
+		--workspace-root . \
+		--summary-json $(COVERAGE_SUMMARY_JSON) \
+		--output-scorecard-md $(COVERAGE_SCORECARD_MD) \
+		--output-scorecard-json $(COVERAGE_SCORECARD_JSON) \
+		--output-report-en Docs/en/Report/Coverage_Report_v$(WORKSPACE_VERSION).md \
+		--output-report-zh Docs/zh/Report/Coverage_Report_v$(WORKSPACE_VERSION).md
+	python3 scripts/write_coverage_ci_summary.py \
+		--scorecard-json $(COVERAGE_SCORECARD_JSON) \
+		--output $(COVERAGE_CI_SUMMARY_MD)
+	@echo "Coverage artifacts refreshed under $(COVERAGE_OUTPUT_DIR)"
 
 # ---------------------------------------------------------------------------
 # Security

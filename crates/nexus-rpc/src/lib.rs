@@ -37,8 +37,9 @@ pub use error::{RpcError, RpcResult};
 pub use intent_tracker::IntentTracker;
 pub use middleware::{apply_middleware, RateLimiter};
 pub use rest::{
-    rest_router, AppState, ConsensusBackend, HtlcBackend, IntentBackend, NetworkBackend,
-    QueryBackend, SessionProvenanceBackend, StateProofBackend, TransactionBroadcaster,
+    rest_router, AppState, BlockBackend, ConsensusBackend, EventBackend, HtlcBackend,
+    IntentBackend, NetworkBackend, QueryBackend, SessionProvenanceBackend, StateProofBackend,
+    TransactionBroadcaster,
 };
 pub use server::{RpcService, RpcServiceBuilder};
 pub use tx_lifecycle::TxLifecycleRegistry;

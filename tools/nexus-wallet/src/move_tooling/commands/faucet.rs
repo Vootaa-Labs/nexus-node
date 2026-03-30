@@ -43,3 +43,43 @@ pub fn run(args: FaucetArgs) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_args() -> FaucetArgs {
+        FaucetArgs {
+            key_file: None,
+            address: None,
+            rpc_url: "http://127.0.0.1:8080".into(),
+        }
+    }
+
+    #[test]
+    fn run_rejects_invalid_rpc_url() {
+        let mut args = base_args();
+        args.rpc_url = "ftp://bad".into();
+        assert!(run(args).is_err());
+    }
+
+    #[test]
+    fn run_rejects_invalid_hex_address() {
+        let mut args = base_args();
+        args.address = Some("not_hex!!".into());
+        let err = run(args).unwrap_err().to_string();
+        assert!(
+            err.contains("invalid hex address") || err.contains("hex"),
+            "unexpected: {err}"
+        );
+    }
+
+    #[test]
+    fn run_rejects_short_hex_address() {
+        // AccountAddress is [u8;32]; 16 bytes is too short.
+        let mut args = base_args();
+        args.address = Some(hex::encode([0u8; 16]));
+        // Should error: wrong length for AccountAddress.
+        assert!(run(args).is_err());
+    }
+}

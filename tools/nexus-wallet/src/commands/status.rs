@@ -34,3 +34,30 @@ pub fn run(args: StatusArgs) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_args(rpc_url: &str) -> StatusArgs {
+        StatusArgs {
+            tx_digest: "deadbeef".into(),
+            rpc_url: rpc_url.into(),
+        }
+    }
+
+    #[test]
+    fn run_rejects_ws_rpc_url() {
+        assert!(run(make_args("ws://localhost:8080")).is_err());
+    }
+
+    #[test]
+    fn run_rejects_ftp_rpc_url() {
+        assert!(run(make_args("ftp://example.com")).is_err());
+    }
+
+    #[test]
+    fn run_rejects_bare_hostname_as_rpc_url() {
+        assert!(run(make_args("localhost:8080")).is_err());
+    }
+}

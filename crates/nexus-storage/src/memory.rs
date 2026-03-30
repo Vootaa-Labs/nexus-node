@@ -177,6 +177,7 @@ impl std::fmt::Debug for MemoryStore {
 mod tests {
     use super::*;
     use crate::traits::WriteBatchOps;
+    use crate::ColumnFamily;
 
     const CF: &str = "cf_state";
 
@@ -320,5 +321,59 @@ mod tests {
         let store = MemoryStore::new();
         let results = store.scan(CF, b"a", b"z").unwrap();
         assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn block_tx_index_scan_orders_by_commit_sequence() {
+        let store = MemoryStore::new();
+        let cf = ColumnFamily::BlockTxIndex.as_str();
+
+        let mut batch = store.new_batch();
+        batch.put_cf(cf, 10u64.to_be_bytes().to_vec(), b"tx10".to_vec());
+        batch.put_cf(cf, 2u64.to_be_bytes().to_vec(), b"tx2".to_vec());
+        batch.put_cf(cf, 1u64.to_be_bytes().to_vec(), b"tx1".to_vec());
+        store.write_batch(batch).await.unwrap();
+
+        // Scan [0, 11) so keys 1,2,10 are all included.
+        let start = 0u64.to_be_bytes();
+        let end = 11u64.to_be_bytes();
+        let rows = store.scan(cf, &start, &end).unwrap();
+
+        assert_eq!(rows.len(), 3);
+        let seqs: Vec<u64> = rows
+            .iter()
+            .map(|(k, _)| u64::from_be_bytes(k.as_slice().try_into().unwrap()))
+            .collect();
+        assert_eq!(seqs, vec![1, 2, 10]);
+    }
+
+    #[tokio::test]
+    async fn block_tx_index_cf_isolated_from_state_cf() {
+        let store = MemoryStore::new();
+        let mut batch = store.new_batch();
+
+        let seq_key = 1u64.to_be_bytes().to_vec();
+        batch.put_cf(
+            ColumnFamily::BlockTxIndex.as_str(),
+            seq_key.clone(),
+            b"tx-index".to_vec(),
+        );
+        batch.put_cf(
+            ColumnFamily::State.as_str(),
+            seq_key.clone(),
+            b"state".to_vec(),
+        );
+        store.write_batch(batch).await.unwrap();
+
+        let block_idx = store
+            .get(ColumnFamily::BlockTxIndex.as_str(), &seq_key)
+            .await
+            .unwrap();
+        let state_val = store
+            .get(ColumnFamily::State.as_str(), &seq_key)
+            .await
+            .unwrap();
+        assert_eq!(block_idx, Some(b"tx-index".to_vec()));
+        assert_eq!(state_val, Some(b"state".to_vec()));
     }
 }

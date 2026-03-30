@@ -29,7 +29,7 @@ use nexus_consensus::{CommittedBatch, ConsensusEngine, EpochManager};
 use nexus_execution::service::ExecutionServiceHandle;
 use nexus_execution::types::{SignedTransaction, TransactionPayload};
 use nexus_intent::{AnchorReceipt, RocksProvenanceStore};
-use nexus_primitives::{Blake3Digest, EpochNumber, ShardId, TimestampMs};
+use nexus_primitives::{Blake3Digest, CommitSequence, EpochNumber, ShardId, TimestampMs};
 use nexus_storage::canonical_empty_root;
 use nexus_storage::traits::{StateStorage, WriteBatchOps};
 use nexus_storage::ColumnFamily;
@@ -42,7 +42,8 @@ use crate::commitment_tracker::SharedCommitmentTracker;
 use crate::node_metrics;
 use crate::readiness::SubsystemHandle;
 use crate::staking_snapshot::{
-    CommitteeRotationPolicy, PersistedElectionResult, RotationOutcome, StakingSnapshot,
+    CommitteeRotationPolicy, ElectedValidator, PersistedElectionResult, RotationOutcome,
+    StakingSnapshot,
 };
 
 use crate::backends::SharedChainHead;
@@ -437,21 +438,15 @@ pub fn spawn_execution_bridge<S: StateStorage>(
                                     eng.advance_epoch(committee.clone(), trigger);
 
                                 // 3. Persist the transition to storage
-                                // (including election result when available).
-                                let persist_res = if let Some(ref er) = persisted_election {
+                                // (including election result — always
+                                // present since v0.1.15).
+                                let persist_res =
                                     crate::epoch_store::persist_epoch_transition_with_election(
                                         &ctx.store,
                                         &committee,
                                         &transition,
-                                        Some(er),
-                                    )
-                                } else {
-                                    crate::epoch_store::persist_epoch_transition(
-                                        &ctx.store,
-                                        &committee,
-                                        &transition,
-                                    )
-                                };
+                                        Some(&persisted_election),
+                                    );
                                 if let Err(e) = persist_res {
                                     metrics::counter!("nexus_epoch_persist_failure_total")
                                         .increment(1);
@@ -501,6 +496,39 @@ pub fn spawn_execution_bridge<S: StateStorage>(
 
 // ── Committee resolution ─────────────────────────────────────────────────────
 
+/// Build a fallback [`PersistedElectionResult`] from the current committee.
+///
+/// Used when no real election occurred (non-election epoch, election
+/// failure, or legacy path) so the RPC layer always has an election
+/// record for the current epoch.
+fn fallback_election_from_committee(
+    eng: &ConsensusEngine,
+    for_epoch: EpochNumber,
+) -> PersistedElectionResult {
+    let committee = eng.committee();
+    let validators = committee.all_validators();
+    let elected: Vec<ElectedValidator> = validators
+        .iter()
+        .filter(|v| !v.is_slashed)
+        .map(|v| {
+            let address = crate::validator_identity::address_from_validator_index(v.index);
+            ElectedValidator {
+                address,
+                effective_stake: v.stake.0,
+                committee_index: v.index.0,
+            }
+        })
+        .collect();
+    let total_effective_stake: u64 = elected.iter().map(|e| e.effective_stake).sum();
+    PersistedElectionResult {
+        for_epoch,
+        snapshot_epoch: committee.epoch(),
+        elected,
+        total_effective_stake,
+        is_fallback: true,
+    }
+}
+
 /// Decide which committee should govern the next epoch.
 ///
 /// If a `CommitteeRotationPolicy` is active and the next epoch is an
@@ -508,18 +536,21 @@ pub fn spawn_execution_bridge<S: StateStorage>(
 /// On election failure (or if no policy / snapshot is available), falls
 /// back to cloning the current committee.
 ///
-/// Returns `(committee, Option<PersistedElectionResult>)`.
+/// Always returns a `PersistedElectionResult` so every epoch has a
+/// durable election record (with `is_fallback = true` for carry-forward
+/// cases).
 fn resolve_next_committee(
     eng: &ConsensusEngine,
     next_epoch: EpochNumber,
     rotation_policy: &Option<CommitteeRotationPolicy>,
     snapshot_provider: &Option<Arc<dyn Fn() -> Option<StakingSnapshot> + Send + Sync>>,
-) -> (nexus_consensus::Committee, Option<PersistedElectionResult>) {
+) -> (nexus_consensus::Committee, PersistedElectionResult) {
     let policy = match rotation_policy {
         Some(p) => p,
         None => {
             // Legacy path: no rotation policy — clone current committee.
-            return (eng.committee().clone(), None);
+            let fallback = fallback_election_from_committee(eng, next_epoch);
+            return (eng.committee().clone(), fallback);
         }
     };
 
@@ -555,7 +586,7 @@ fn resolve_next_committee(
             }) {
                 Ok(committee) => {
                     let persisted = PersistedElectionResult::from(&result);
-                    (committee, Some(persisted))
+                    (committee, persisted)
                 }
                 Err(e) => {
                     warn!(
@@ -564,7 +595,8 @@ fn resolve_next_committee(
                         "epoch boundary: election-to-committee failed, falling back to current"
                     );
                     metrics::counter!("nexus_epoch_election_fallback_total").increment(1);
-                    (eng.committee().clone(), None)
+                    let fallback = fallback_election_from_committee(eng, next_epoch);
+                    (eng.committee().clone(), fallback)
                 }
             }
         }
@@ -574,7 +606,8 @@ fn resolve_next_committee(
                 interval = policy.election_epoch_interval,
                 "epoch boundary: not an election epoch, carrying forward committee"
             );
-            (eng.committee().clone(), None)
+            let fallback = fallback_election_from_committee(eng, next_epoch);
+            (eng.committee().clone(), fallback)
         }
         RotationOutcome::Fallback { reason } => {
             warn!(
@@ -583,7 +616,8 @@ fn resolve_next_committee(
                 "epoch boundary: election failed, carrying forward current committee as safety fallback"
             );
             metrics::counter!("nexus_epoch_election_fallback_total").increment(1);
-            (eng.committee().clone(), None)
+            let fallback = fallback_election_from_committee(eng, next_epoch);
+            (eng.committee().clone(), fallback)
         }
     }
 }
@@ -783,7 +817,7 @@ async fn execute_resolved_batch<S: StateStorage>(
 
         // Persist receipts and state changes with the correct shard_id.
         let persist_start = Instant::now();
-        persist_results(&ctx.store, &block_result, *shard_id)
+        persist_results(&ctx.store, &block_result, *shard_id, sequence)
             .await
             .map_err(|e| format!("persist failed for shard {}: {e}", shard_id.0))?;
         node_metrics::bridge_persist_latency(persist_start.elapsed().as_secs_f64());
@@ -964,12 +998,29 @@ async fn persist_dead_letter<S: StateStorage>(store: &S, batch: &CommittedBatch,
 }
 
 /// Persist execution results (receipts + state changes) to storage.
+///
+/// Also writes a `BlockTxIndex` entry mapping `commit_seq` to the list of
+/// transaction digests in this block, enabling batch receipt retrieval.
 async fn persist_results<S: StateStorage>(
     store: &S,
     result: &nexus_execution::types::BlockExecutionResult,
     shard_id: ShardId,
+    commit_seq: CommitSequence,
 ) -> Result<(), nexus_storage::StorageError> {
     let mut batch = store.new_batch();
+
+    // Write BlockTxIndex: CommitSequence (8B BE) → Vec<TxDigest> (BCS).
+    {
+        let tx_digests: Vec<nexus_primitives::Blake3Digest> =
+            result.receipts.iter().map(|r| r.tx_digest).collect();
+        let idx_key = commit_seq.0.to_be_bytes().to_vec();
+        let idx_value = bcs::to_bytes(&tx_digests).map_err(|e| {
+            nexus_storage::StorageError::Serialization(format!(
+                "BlockTxIndex serialization error: {e}"
+            ))
+        })?;
+        batch.put_cf(ColumnFamily::BlockTxIndex.as_str(), idx_key, idx_value);
+    }
 
     for receipt in &result.receipts {
         // Write receipt to cf_receipts: key = tx_digest bytes, value = JSON
@@ -1028,6 +1079,51 @@ async fn persist_results<S: StateStorage>(
                     }
                 }
             }
+        }
+
+        // Persist contract events to cf_events (3 keys per event).
+        for (event_seq, event) in receipt.events.iter().enumerate() {
+            let event_seq = event_seq as u32;
+            let tx_index = 0u32; // single-tx-per-receipt for now
+
+            let stored = crate::backends::StoredEvent {
+                emitter: event.emitter,
+                type_tag: event.type_tag.clone(),
+                sequence_number: event.sequence_number,
+                data: event.data.clone(),
+                tx_digest: receipt.tx_digest.0,
+                block_seq: commit_seq.0,
+                timestamp_ms: receipt.timestamp.0,
+            };
+            let value = bcs::to_bytes(&stored).map_err(|e| {
+                nexus_storage::StorageError::Serialization(format!(
+                    "event serialization error: {e}"
+                ))
+            })?;
+
+            // Primary key: e:<block_seq><tx_index><event_seq> → BCS(StoredEvent)
+            let primary = nexus_storage::EventKey::primary(commit_seq, tx_index, event_seq);
+            batch.put_cf(ColumnFamily::Events.as_str(), primary, value);
+
+            // Secondary by-contract: c:<emitter><block_seq><event_seq> → tx_index (4B)
+            let by_contract =
+                nexus_storage::EventKey::by_contract(&event.emitter, commit_seq, event_seq);
+            batch.put_cf(
+                ColumnFamily::Events.as_str(),
+                by_contract,
+                tx_index.to_be_bytes().to_vec(),
+            );
+
+            // Secondary by-type: t:<type_hash><block_seq><event_seq> → tx_index (4B)
+            let type_hash = nexus_primitives::Blake3Digest::from_bytes(
+                blake3::hash(event.type_tag.as_bytes()).into(),
+            );
+            let by_type = nexus_storage::EventKey::by_type(&type_hash, commit_seq, event_seq);
+            batch.put_cf(
+                ColumnFamily::Events.as_str(),
+                by_type,
+                tx_index.to_be_bytes().to_vec(),
+            );
         }
     }
 
@@ -1128,6 +1224,7 @@ mod tests {
                 key: b"balance".to_vec(),
                 value: Some(1000u64.to_le_bytes().to_vec()),
             }],
+            events: vec![],
             timestamp: TimestampMs::now(),
         }
     }
@@ -1145,7 +1242,9 @@ mod tests {
             execution_ms: 5,
         };
 
-        persist_results(&store, &result, shard_id).await.unwrap();
+        persist_results(&store, &result, shard_id, CommitSequence(1))
+            .await
+            .unwrap();
 
         // Verify receipt is stored
         let raw = store
@@ -1172,7 +1271,9 @@ mod tests {
             execution_ms: 5,
         };
 
-        persist_results(&store, &result, shard_id).await.unwrap();
+        persist_results(&store, &result, shard_id, CommitSequence(1))
+            .await
+            .unwrap();
 
         // Verify state change is applied — key is AccountKey ‖ change.key
         let mut key = nexus_storage::AccountKey {
@@ -1196,7 +1297,7 @@ mod tests {
             execution_ms: 0,
         };
 
-        let res = persist_results(&store, &result, ShardId(0)).await;
+        let res = persist_results(&store, &result, ShardId(0), CommitSequence(0)).await;
         assert!(res.is_ok());
     }
 
@@ -1225,7 +1326,9 @@ mod tests {
             execution_ms: 10,
         };
 
-        persist_results(&store, &result, shard_id).await.unwrap();
+        persist_results(&store, &result, shard_id, CommitSequence(1))
+            .await
+            .unwrap();
 
         // Both receipts should be stored
         let r1 = store
@@ -1352,5 +1455,58 @@ mod tests {
         // `return` actually fires and halts the bridge.
         const _: () = assert!(MAX_DEAD_LETTER_ENTRIES > 0);
         const _: () = assert!(MAX_DEAD_LETTER_ENTRIES <= 256);
+    }
+
+    #[test]
+    fn fallback_election_from_committee_populates_all_fields() {
+        use nexus_consensus::types::ValidatorInfo;
+        use nexus_consensus::Committee;
+        use nexus_crypto::falcon::FalconSigner;
+        use nexus_crypto::Signer;
+        use nexus_primitives::{Amount, EpochNumber, ValidatorIndex};
+
+        let (_, vk0) = FalconSigner::generate_keypair();
+        let (_, vk1) = FalconSigner::generate_keypair();
+        let (_, vk2) = FalconSigner::generate_keypair();
+
+        let validators = vec![
+            ValidatorInfo {
+                index: ValidatorIndex(0),
+                falcon_pub_key: vk0,
+                stake: Amount(1000),
+                reputation: Default::default(),
+                is_slashed: false,
+                shard_id: None,
+            },
+            ValidatorInfo {
+                index: ValidatorIndex(1),
+                falcon_pub_key: vk1,
+                stake: Amount(2000),
+                reputation: Default::default(),
+                is_slashed: false,
+                shard_id: None,
+            },
+            ValidatorInfo {
+                index: ValidatorIndex(2),
+                falcon_pub_key: vk2,
+                stake: Amount(500),
+                reputation: Default::default(),
+                is_slashed: true,
+                shard_id: None,
+            },
+        ];
+
+        let committee = Committee::new(EpochNumber(5), validators).unwrap();
+        let eng = ConsensusEngine::new(EpochNumber(5), committee);
+        let result = fallback_election_from_committee(&eng, EpochNumber(6));
+
+        assert_eq!(result.for_epoch, EpochNumber(6));
+        assert_eq!(result.snapshot_epoch, EpochNumber(5));
+        assert!(result.is_fallback);
+        // Slashed validator excluded
+        assert_eq!(result.elected.len(), 2);
+        assert_eq!(result.total_effective_stake, 3000);
+        assert_eq!(result.elected[0].committee_index, 0);
+        assert_eq!(result.elected[1].committee_index, 1);
     }
 }

@@ -226,4 +226,28 @@ mod tests {
             "different chains should derive different system seeds"
         );
     }
+
+    #[test]
+    fn derive_system_seed_is_deterministic() {
+        let a = derive_system_seed("nexus-testnet-1");
+        let b = derive_system_seed("nexus-testnet-1");
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn derive_system_seed_is_32_bytes() {
+        let seed = derive_system_seed("anything");
+        assert_eq!(seed.len(), 32);
+    }
+
+    #[test]
+    fn derive_system_seed_domain_separated() {
+        // A plain blake3 of the same input without domain tag should differ
+        let seed = derive_system_seed("nexus-devnet");
+        let plain = *blake3::hash(b"nexus-devnet").as_bytes();
+        assert_ne!(
+            seed, plain,
+            "domain separation must produce different output"
+        );
+    }
 }

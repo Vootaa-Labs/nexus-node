@@ -50,3 +50,34 @@ pub fn run(args: FaucetArgs) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_args() -> FaucetArgs {
+        FaucetArgs {
+            key_file: None,
+            address: None,
+            rpc_url: "http://127.0.0.1:8080".into(),
+        }
+    }
+
+    #[test]
+    fn run_rejects_invalid_rpc_url() {
+        let mut args = base_args();
+        args.rpc_url = "grpc://bad".into();
+        assert!(run(args).is_err());
+    }
+
+    #[test]
+    fn run_rejects_invalid_hex_address() {
+        let mut args = base_args();
+        args.address = Some("ZZZZ".into());
+        let err = run(args).unwrap_err().to_string();
+        assert!(
+            err.contains("invalid hex address") || err.contains("hex"),
+            "unexpected: {err}"
+        );
+    }
+}

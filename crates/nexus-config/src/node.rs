@@ -244,4 +244,154 @@ log_level = "debug"
         );
         assert_eq!(restored.execution.shard_count, cfg.execution.shard_count);
     }
+
+    // ── load() and env overrides coverage ──────────────────────────────────
+
+    #[test]
+    fn load_without_file_returns_default() {
+        // Clear any NEXUS_ env vars that might be set
+        for key in [
+            "NEXUS_LOG_LEVEL",
+            "NEXUS_NETWORK_PORT",
+            "NEXUS_STORAGE_PATH",
+            "NEXUS_GRPC_PORT",
+            "NEXUS_REST_PORT",
+            "NEXUS_GENESIS_PATH",
+            "NEXUS_VALIDATOR_KEY_PATH",
+            "NEXUS_DEV_MODE",
+        ] {
+            std::env::remove_var(key);
+        }
+        let cfg = NodeConfig::load(None).expect("load");
+        assert_eq!(cfg.network.max_peers, 200);
+        assert!(!cfg.dev_mode);
+    }
+
+    #[test]
+    fn load_with_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("test.toml");
+        std::fs::write(&path, "dev_mode = true\n").expect("write");
+        for key in [
+            "NEXUS_LOG_LEVEL",
+            "NEXUS_NETWORK_PORT",
+            "NEXUS_STORAGE_PATH",
+            "NEXUS_GRPC_PORT",
+            "NEXUS_REST_PORT",
+            "NEXUS_GENESIS_PATH",
+            "NEXUS_VALIDATOR_KEY_PATH",
+            "NEXUS_DEV_MODE",
+        ] {
+            std::env::remove_var(key);
+        }
+        let cfg = NodeConfig::load(Some(&path)).expect("load");
+        assert!(cfg.dev_mode);
+    }
+
+    #[test]
+    fn env_override_log_level() {
+        std::env::set_var("NEXUS_LOG_LEVEL", "trace");
+        let mut cfg = NodeConfig::default();
+        NodeConfig::apply_env_overrides(&mut cfg).unwrap();
+        assert_eq!(cfg.telemetry.log_level, "trace");
+        std::env::remove_var("NEXUS_LOG_LEVEL");
+    }
+
+    #[test]
+    fn env_override_storage_path() {
+        std::env::set_var("NEXUS_STORAGE_PATH", "/tmp/test-db");
+        let mut cfg = NodeConfig::default();
+        NodeConfig::apply_env_overrides(&mut cfg).unwrap();
+        assert_eq!(cfg.storage.rocksdb_path, PathBuf::from("/tmp/test-db"));
+        std::env::remove_var("NEXUS_STORAGE_PATH");
+    }
+
+    #[test]
+    fn env_override_genesis_and_key_path() {
+        std::env::set_var("NEXUS_GENESIS_PATH", "/etc/nexus/genesis.json");
+        std::env::set_var("NEXUS_VALIDATOR_KEY_PATH", "/etc/nexus/keys");
+        let mut cfg = NodeConfig::default();
+        NodeConfig::apply_env_overrides(&mut cfg).unwrap();
+        assert_eq!(
+            cfg.genesis_path,
+            Some(PathBuf::from("/etc/nexus/genesis.json"))
+        );
+        assert_eq!(
+            cfg.validator_key_path,
+            Some(PathBuf::from("/etc/nexus/keys"))
+        );
+        std::env::remove_var("NEXUS_GENESIS_PATH");
+        std::env::remove_var("NEXUS_VALIDATOR_KEY_PATH");
+    }
+
+    #[test]
+    fn env_override_dev_mode_variants() {
+        for (val, expected) in [
+            ("1", true),
+            ("true", true),
+            ("yes", true),
+            ("0", false),
+            ("no", false),
+        ] {
+            std::env::set_var("NEXUS_DEV_MODE", val);
+            let mut cfg = NodeConfig::default();
+            NodeConfig::apply_env_overrides(&mut cfg).unwrap();
+            assert_eq!(cfg.dev_mode, expected, "NEXUS_DEV_MODE={val}");
+        }
+        std::env::remove_var("NEXUS_DEV_MODE");
+    }
+
+    #[test]
+    fn env_override_invalid_port_returns_error() {
+        std::env::set_var("NEXUS_NETWORK_PORT", "not_a_number");
+        let mut cfg = NodeConfig::default();
+        let err = NodeConfig::apply_env_overrides(&mut cfg).unwrap_err();
+        assert!(matches!(err, ConfigError::EnvOverride { .. }));
+        std::env::remove_var("NEXUS_NETWORK_PORT");
+    }
+
+    #[test]
+    fn env_override_grpc_port() {
+        std::env::set_var("NEXUS_GRPC_PORT", "9999");
+        let mut cfg = NodeConfig::default();
+        NodeConfig::apply_env_overrides(&mut cfg).unwrap();
+        assert_eq!(cfg.rpc.grpc_listen_addr.port(), 9999);
+        std::env::remove_var("NEXUS_GRPC_PORT");
+    }
+
+    #[test]
+    fn env_override_rest_port() {
+        std::env::set_var("NEXUS_REST_PORT", "8888");
+        let mut cfg = NodeConfig::default();
+        NodeConfig::apply_env_overrides(&mut cfg).unwrap();
+        assert_eq!(cfg.rpc.rest_listen_addr.port(), 8888);
+        std::env::remove_var("NEXUS_REST_PORT");
+    }
+
+    #[test]
+    fn env_override_network_port() {
+        std::env::set_var("NEXUS_NETWORK_PORT", "7777");
+        let mut cfg = NodeConfig::default();
+        NodeConfig::apply_env_overrides(&mut cfg).unwrap();
+        assert_eq!(cfg.network.listen_addr.port(), 7777);
+        std::env::remove_var("NEXUS_NETWORK_PORT");
+    }
+
+    #[test]
+    fn env_override_invalid_grpc_port_returns_error() {
+        std::env::set_var("NEXUS_GRPC_PORT", "xyz");
+        let mut cfg = NodeConfig::default();
+        let err = NodeConfig::apply_env_overrides(&mut cfg).unwrap_err();
+        assert!(matches!(err, ConfigError::EnvOverride { .. }));
+        std::env::remove_var("NEXUS_GRPC_PORT");
+    }
+
+    #[test]
+    fn env_override_invalid_rest_port_returns_error() {
+        std::env::set_var("NEXUS_REST_PORT", "bad");
+        let mut cfg = NodeConfig::default();
+        let err = NodeConfig::apply_env_overrides(&mut cfg).unwrap_err();
+        assert!(matches!(err, ConfigError::EnvOverride { .. }));
+        std::env::remove_var("NEXUS_REST_PORT");
+    }
 }

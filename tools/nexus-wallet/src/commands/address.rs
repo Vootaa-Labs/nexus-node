@@ -27,3 +27,34 @@ pub fn run(args: AddressArgs) -> Result<()> {
     println!("{}", identity.address.to_hex());
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_succeeds_with_no_key_file() {
+        // ephemeral_identity() always succeeds; no key file needed.
+        let result = run(AddressArgs { key_file: None });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn run_fails_with_nonexistent_key_file() {
+        let result = run(AddressArgs {
+            key_file: Some("/nonexistent/path/no_key.json".into()),
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn run_produces_32_byte_hex_address() {
+        // A 32-byte address is 64 hex chars.
+        // We can't capture stdout, but we verify run() itself succeeds and
+        // that ephemeral_identity produces a 32-byte address.
+        let identity = rpc_client::ephemeral_identity();
+        let hex = identity.address.to_hex();
+        // AccountAddress is [u8; 32] → 64 hex chars.
+        assert_eq!(hex.len(), 64, "expected 64-char hex, got {hex}");
+    }
+}

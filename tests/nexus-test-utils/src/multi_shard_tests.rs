@@ -202,6 +202,7 @@ async fn persist_results_respects_shard_isolation() {
             key: b"balance".to_vec(),
             value: Some(500u64.to_le_bytes().to_vec()),
         }],
+        events: vec![],
         timestamp: TimestampMs::now(),
     };
 
@@ -216,6 +217,7 @@ async fn persist_results_respects_shard_isolation() {
             key: b"balance".to_vec(),
             value: Some(800u64.to_le_bytes().to_vec()),
         }],
+        events: vec![],
         timestamp: TimestampMs::now(),
     };
 

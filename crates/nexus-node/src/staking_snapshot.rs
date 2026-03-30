@@ -1092,4 +1092,140 @@ mod tests {
         );
         assert_eq!(restored.is_fallback, persisted.is_fallback);
     }
+
+    #[test]
+    fn is_active_returns_false_for_nonzero_status() {
+        let r = record(1, one_nxs(), 0, 1); // status=1 → inactive
+        assert!(!r.is_active());
+    }
+
+    #[test]
+    fn is_active_returns_true_for_zero_status() {
+        let r = record(1, one_nxs(), 0, 0);
+        assert!(r.is_active());
+    }
+
+    #[test]
+    fn election_to_committee_success() {
+        use nexus_crypto::{FalconSigner, Signer};
+        let (_, key) = FalconSigner::generate_keypair();
+        let target = addr(7);
+        let result = ElectionResult {
+            for_epoch: EpochNumber(3),
+            snapshot_epoch: EpochNumber(2),
+            elected: vec![ElectedValidator {
+                address: target,
+                effective_stake: one_nxs(),
+                committee_index: 0,
+            }],
+            total_effective_stake: one_nxs(),
+        };
+        let committee = election_to_committee(&result, &|a| {
+            if *a == target {
+                Some(key.clone())
+            } else {
+                None
+            }
+        })
+        .expect("should build committee");
+        assert_eq!(committee.all_validators().len(), 1);
+    }
+
+    #[test]
+    fn election_to_committee_fails_on_missing_key() {
+        let result = ElectionResult {
+            for_epoch: EpochNumber(3),
+            snapshot_epoch: EpochNumber(2),
+            elected: vec![ElectedValidator {
+                address: addr(9),
+                effective_stake: one_nxs(),
+                committee_index: 0,
+            }],
+            total_effective_stake: one_nxs(),
+        };
+        let err = election_to_committee(&result, &|_| None).unwrap_err();
+        assert!(
+            matches!(err, StakingSnapshotError::CommitteeConstruction(_)),
+            "expected CommitteeConstruction error"
+        );
+    }
+
+    #[test]
+    fn eligible_candidates_with_policy_direct() {
+        let snap = StakingSnapshot::new(
+            EpochNumber(0),
+            vec![
+                record(1, 3 * one_nxs(), 0, 0),      // active, eligible
+                slashed_record(2, 2 * one_nxs(), 0), // slashed
+                record(3, 0, 0, 0),                  // zero effective stake → ineligible
+            ],
+        );
+        let policy = CommitteeRotationPolicy {
+            exclude_slashed: true,
+            ..CommitteeRotationPolicy::default()
+        };
+        let candidates = snap.eligible_candidates_with_policy(&policy);
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].address, addr(1));
+    }
+
+    // ── Error Display coverage ───────────────────────────────────────────
+
+    #[test]
+    fn error_display_insufficient_validators() {
+        let err = StakingSnapshotError::InsufficientValidators {
+            found: 2,
+            required: 4,
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("insufficient validators"), "{msg}");
+        assert!(msg.contains("2"));
+        assert!(msg.contains("4"));
+    }
+
+    #[test]
+    fn error_display_insufficient_total_stake() {
+        let err = StakingSnapshotError::InsufficientTotalStake {
+            total: 100,
+            required: 1000,
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("insufficient total stake"), "{msg}");
+        assert!(msg.contains("100"));
+    }
+
+    #[test]
+    fn error_display_committee_construction() {
+        let err = StakingSnapshotError::CommitteeConstruction("test reason".to_owned());
+        let msg = format!("{err}");
+        assert!(msg.contains("committee construction failed"), "{msg}");
+        assert!(msg.contains("test reason"));
+    }
+
+    #[test]
+    fn error_is_std_error() {
+        let err = StakingSnapshotError::InsufficientValidators {
+            found: 0,
+            required: 4,
+        };
+        // Exercises the std::error::Error impl
+        let _: &dyn std::error::Error = &err;
+    }
+
+    #[test]
+    fn persisted_election_is_not_fallback_by_default() {
+        let snap = StakingSnapshot::new(
+            EpochNumber(0),
+            vec![
+                record(1, 3 * one_nxs(), 0, 0),
+                record(2, 2 * one_nxs(), 0, 0),
+                record(3, 4 * one_nxs(), 0, 0),
+                record(4, one_nxs(), 0, 0),
+            ],
+        );
+        let policy = ElectionPolicy::default();
+        let result = elect_committee(&snap, &policy, EpochNumber(1)).unwrap();
+        let persisted = PersistedElectionResult::from(&result);
+        assert!(!persisted.is_fallback);
+    }
 }

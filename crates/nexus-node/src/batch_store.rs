@@ -291,4 +291,111 @@ mod tests {
         store.remove(&make_batch_digest(1));
         assert_eq!(store.len(), 1);
     }
+
+    // ── eviction ─────────────────────────────────────────────────────
+
+    #[test]
+    fn evict_excess_noop_when_under_capacity() {
+        let store = BatchStore::new();
+        store.insert(make_batch_digest(1), vec![]);
+        store.evict_excess();
+        assert_eq!(store.len(), 1);
+    }
+
+    #[test]
+    fn insert_past_capacity_triggers_eviction() {
+        let store = BatchStore::new();
+        // Insert MAX_RETAINED_BATCHES + 1 entries.
+        for i in 0..=(MAX_RETAINED_BATCHES as u16) {
+            let mut digest_bytes = [0u8; 32];
+            digest_bytes[0..2].copy_from_slice(&i.to_be_bytes());
+            store.insert(Blake3Digest(digest_bytes), vec![]);
+        }
+        assert!(
+            store.len() <= MAX_RETAINED_BATCHES,
+            "store should have evicted excess: len={}",
+            store.len()
+        );
+    }
+
+    // ── with persistence mock ────────────────────────────────────────
+
+    struct MockPersist;
+
+    impl crate::batch_persist::BatchPersistOps for MockPersist {
+        fn put_batch(
+            &self,
+            _digest: &BatchDigest,
+            _txs: &[SignedTransaction],
+        ) -> Result<(), crate::batch_persist::BatchPersistError> {
+            Ok(())
+        }
+        fn get_batch(
+            &self,
+            _digest: &BatchDigest,
+        ) -> Result<Option<Vec<SignedTransaction>>, crate::batch_persist::BatchPersistError>
+        {
+            Ok(None)
+        }
+        fn delete_batch(
+            &self,
+            _digest: &BatchDigest,
+        ) -> Result<(), crate::batch_persist::BatchPersistError> {
+            Ok(())
+        }
+        fn restore_batches(
+            &self,
+        ) -> Result<
+            Vec<(BatchDigest, Vec<SignedTransaction>)>,
+            crate::batch_persist::BatchPersistError,
+        > {
+            Ok(vec![
+                (make_batch_digest(10), vec![make_tx(10)]),
+                (make_batch_digest(20), vec![make_tx(20), make_tx(21)]),
+            ])
+        }
+    }
+
+    #[test]
+    fn new_with_persistence_creates_store() {
+        let store = BatchStore::new_with_persistence(Box::new(MockPersist));
+        assert!(store.is_empty());
+    }
+
+    #[test]
+    fn restore_from_disk_populates_dashmap() {
+        let store = BatchStore::new_with_persistence(Box::new(MockPersist));
+        let count = store.restore_from_disk();
+        assert_eq!(count, 2);
+        assert_eq!(store.len(), 2);
+        assert!(store.contains(&make_batch_digest(10)));
+        assert!(store.contains(&make_batch_digest(20)));
+    }
+
+    #[test]
+    fn restore_from_disk_returns_zero_without_persistence() {
+        let store = BatchStore::new();
+        assert_eq!(store.restore_from_disk(), 0);
+    }
+
+    #[test]
+    fn insert_with_persistence_calls_put_batch() {
+        let store = BatchStore::new_with_persistence(Box::new(MockPersist));
+        let is_new = store.insert(make_batch_digest(1), vec![make_tx(1)]);
+        assert!(is_new);
+        assert_eq!(store.len(), 1);
+    }
+
+    #[test]
+    fn get_falls_back_to_disk() {
+        let store = BatchStore::new_with_persistence(Box::new(MockPersist));
+        // Not in memory, MockPersist.get_batch returns None.
+        assert!(store.get(&make_batch_digest(99)).is_none());
+    }
+
+    #[test]
+    fn default_is_same_as_new() {
+        let store = BatchStore::default();
+        assert!(store.is_empty());
+    }
 }

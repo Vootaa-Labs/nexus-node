@@ -59,6 +59,7 @@ struct ManifestModule {
     blake3: String,
 }
 
+#[derive(Debug)]
 pub struct ArtifactResult {
     pub artifact_dir: PathBuf,
     #[allow(dead_code)]
@@ -308,4 +309,351 @@ fn load_build_modules(build_dir: &Path) -> anyhow::Result<Vec<Vec<u8>>> {
         }
     }
     Ok(modules)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    // ── UpgradePolicy serde ──────────────────────────────────────────
+
+    #[test]
+    fn upgrade_policy_serde_roundtrip() {
+        for policy in [
+            UpgradePolicy::Immutable,
+            UpgradePolicy::Compatible,
+            UpgradePolicy::GovernanceOnly,
+        ] {
+            let json = serde_json::to_string(&policy).unwrap();
+            let back: UpgradePolicy = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, policy);
+        }
+    }
+
+    // ── parse_upgrade_policy ─────────────────────────────────────────
+
+    #[test]
+    fn parse_upgrade_policy_defaults_to_immutable_for_missing_toml() {
+        let dir = TempDir::new().unwrap();
+        assert_eq!(parse_upgrade_policy(dir.path()), UpgradePolicy::Immutable);
+    }
+
+    #[test]
+    fn parse_upgrade_policy_reads_compatible_from_toml() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("Move.toml"),
+            "[package]\nname = \"test\"\nupgrade_policy = \"compatible\"\n",
+        )
+        .unwrap();
+        assert_eq!(parse_upgrade_policy(dir.path()), UpgradePolicy::Compatible);
+    }
+
+    #[test]
+    fn parse_upgrade_policy_reads_governance_only_from_toml() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("Move.toml"),
+            "[package]\nname = \"test\"\nupgrade_policy = \"governance_only\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            parse_upgrade_policy(dir.path()),
+            UpgradePolicy::GovernanceOnly
+        );
+    }
+
+    #[test]
+    fn parse_upgrade_policy_defaults_for_unknown_policy_string() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("Move.toml"),
+            "[package]\nname = \"test\"\nupgrade_policy = \"exotic_future_value\"\n",
+        )
+        .unwrap();
+        // Unknown values fall through to Immutable.
+        assert_eq!(parse_upgrade_policy(dir.path()), UpgradePolicy::Immutable);
+    }
+
+    #[test]
+    fn parse_upgrade_policy_defaults_when_field_absent() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("Move.toml"), "[package]\nname = \"test\"\n").unwrap();
+        assert_eq!(parse_upgrade_policy(dir.path()), UpgradePolicy::Immutable);
+    }
+
+    // ── parse_named_addresses ────────────────────────────────────────
+
+    #[test]
+    fn parse_named_addresses_returns_empty_for_missing_toml() {
+        let dir = TempDir::new().unwrap();
+        let addrs = parse_named_addresses(dir.path());
+        assert!(addrs.is_empty());
+    }
+
+    #[test]
+    fn parse_named_addresses_parses_hex_address() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("Move.toml"),
+            "[addresses]\ncounter = \"0x01\"\n",
+        )
+        .unwrap();
+        let addrs = parse_named_addresses(dir.path());
+        assert_eq!(addrs.len(), 1);
+        assert_eq!(addrs[0].0, "counter");
+        // 0x01 in a 32-byte array: last byte = 1, rest zeros.
+        assert_eq!(addrs[0].1 .0[31], 1u8);
+        assert!(addrs[0].1 .0[..31].iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    fn parse_named_addresses_skips_placeholder_underscore() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("Move.toml"),
+            "[dev-addresses]\ncounter = \"_\"\n",
+        )
+        .unwrap();
+        let addrs = parse_named_addresses(dir.path());
+        assert!(addrs.is_empty());
+    }
+
+    #[test]
+    fn parse_named_addresses_skips_invalid_hex() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("Move.toml"),
+            "[addresses]\nbad = \"0xZZZZ\"\n",
+        )
+        .unwrap();
+        // Should not panic; just skip the invalid entry.
+        let addrs = parse_named_addresses(dir.path());
+        assert!(addrs.is_empty());
+    }
+
+    #[test]
+    fn parse_named_addresses_reads_dev_addresses_over_addresses() {
+        let dir = TempDir::new().unwrap();
+        // When both sections exist, parse_named_addresses reads dev-addresses
+        // (or addresses as fallback). In TOML, both can coexist; our code tries
+        // dev-addresses first then addresses.
+        fs::write(
+            dir.path().join("Move.toml"),
+            "[addresses]\ncounter = \"0x01\"\n[dev-addresses]\ncounter = \"0x02\"\n",
+        )
+        .unwrap();
+        let addrs = parse_named_addresses(dir.path());
+        // dev-addresses takes priority
+        assert_eq!(addrs.len(), 1);
+        assert_eq!(addrs[0].1 .0[31], 2u8);
+    }
+
+    // ── collect_modules ──────────────────────────────────────────────
+
+    #[test]
+    fn collect_modules_returns_empty_for_nonexistent_dir() {
+        let dir = TempDir::new().unwrap();
+        let nonexistent = dir.path().join("bytecode_modules");
+        let modules = collect_modules(&nonexistent).unwrap();
+        assert!(modules.is_empty());
+    }
+
+    #[test]
+    fn collect_modules_returns_sorted_by_name() {
+        let dir = TempDir::new().unwrap();
+        let bc_dir = dir.path().join("bytecode_modules");
+        fs::create_dir(&bc_dir).unwrap();
+        fs::write(bc_dir.join("zebra.mv"), b"ZZ").unwrap();
+        fs::write(bc_dir.join("alpha.mv"), b"AA").unwrap();
+        fs::write(bc_dir.join("middle.mv"), b"MM").unwrap();
+
+        let modules = collect_modules(&bc_dir).unwrap();
+        assert_eq!(modules.len(), 3);
+        assert_eq!(modules[0].0, "alpha");
+        assert_eq!(modules[1].0, "middle");
+        assert_eq!(modules[2].0, "zebra");
+    }
+
+    #[test]
+    fn collect_modules_ignores_non_mv_files() {
+        let dir = TempDir::new().unwrap();
+        let bc_dir = dir.path().join("bytecode_modules");
+        fs::create_dir(&bc_dir).unwrap();
+        fs::write(bc_dir.join("counter.mv"), b"MV").unwrap();
+        fs::write(bc_dir.join("counter.json"), b"{}").unwrap();
+
+        let modules = collect_modules(&bc_dir).unwrap();
+        assert_eq!(modules.len(), 1);
+        assert_eq!(modules[0].0, "counter");
+    }
+
+    // ── PackageMetadata serde ────────────────────────────────────────
+
+    #[test]
+    fn package_metadata_bcs_roundtrip() {
+        let meta = PackageMetadata {
+            name: "my_pkg".to_string(),
+            package_hash: [0xAB; 32],
+            named_addresses: vec![("counter".to_string(), AccountAddress([1u8; 32]))],
+            module_hashes: vec![("mod_a".to_string(), [0x11; 32])],
+            abi_hash: [0u8; 32],
+            upgrade_policy: UpgradePolicy::Compatible,
+            deployer: AccountAddress([0x22; 32]),
+            version: 3,
+        };
+        let bytes = bcs::to_bytes(&meta).unwrap();
+        let back: PackageMetadata = bcs::from_bytes(&bytes).unwrap();
+        assert_eq!(back, meta);
+    }
+
+    // ── load_package_modules ─────────────────────────────────────────
+
+    #[test]
+    fn load_package_modules_reads_from_nexus_artifact_bytecode() {
+        let dir = TempDir::new().unwrap();
+        let bc_dir = dir.path().join("nexus-artifact").join("bytecode");
+        fs::create_dir_all(&bc_dir).unwrap();
+        fs::write(bc_dir.join("foo.mv"), b"BYTES").unwrap();
+
+        let modules = load_package_modules(dir.path()).unwrap();
+        assert_eq!(modules.len(), 1);
+        assert_eq!(modules[0], b"BYTES");
+    }
+
+    #[test]
+    fn load_package_modules_falls_back_to_build_dir() {
+        let dir = TempDir::new().unwrap();
+        let pkg_dir = dir.path().join("build").join("my_package");
+        let bc_dir = pkg_dir.join("bytecode_modules");
+        fs::create_dir_all(&bc_dir).unwrap();
+        fs::write(bc_dir.join("module_a.mv"), b"MODABYTES").unwrap();
+
+        let modules = load_package_modules(dir.path()).unwrap();
+        assert_eq!(modules.len(), 1);
+        assert_eq!(modules[0], b"MODABYTES");
+    }
+
+    #[test]
+    fn load_package_modules_errors_when_neither_dir_exists() {
+        let dir = TempDir::new().unwrap();
+        let result = load_package_modules(dir.path());
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("nexus-artifact") || msg.contains("build"));
+    }
+
+    #[test]
+    fn load_package_modules_errors_when_nexus_artifact_has_no_bytecode_dir() {
+        let dir = TempDir::new().unwrap();
+        // Create nexus-artifact/ but no bytecode/ subdirectory.
+        fs::create_dir(dir.path().join("nexus-artifact")).unwrap();
+        let result = load_package_modules(dir.path());
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("bytecode"));
+    }
+
+    // ── generate() ──────────────────────────────────────────────────
+
+    #[test]
+    fn generate_errors_without_build_dir() {
+        let dir = TempDir::new().unwrap();
+        let err = generate(dir.path()).expect_err("should fail without build/");
+        assert!(err.to_string().contains("no build/"));
+    }
+
+    #[test]
+    fn generate_errors_without_bytecode_modules() {
+        let dir = TempDir::new().unwrap();
+        let pkg_dir = dir.path().join("build").join("my_pkg");
+        fs::create_dir_all(&pkg_dir).unwrap();
+        // No bytecode_modules inside
+        fs::write(
+            dir.path().join("Move.toml"),
+            "[package]\nname = \"my_pkg\"\n",
+        )
+        .unwrap();
+        let err = generate(dir.path()).expect_err("should fail without .mv");
+        assert!(err.to_string().contains("no .mv"));
+    }
+
+    #[test]
+    fn generate_success_with_bytecode() {
+        let dir = TempDir::new().unwrap();
+        let pkg_dir = dir.path().join("build").join("my_pkg");
+        let bc_dir = pkg_dir.join("bytecode_modules");
+        fs::create_dir_all(&bc_dir).unwrap();
+        fs::write(bc_dir.join("counter.mv"), b"fake bytecode").unwrap();
+        fs::write(
+            dir.path().join("Move.toml"),
+            "[package]\nname = \"my_pkg\"\nupgrade_policy = \"compatible\"\n[addresses]\ncounter = \"0x01\"\n",
+        )
+        .unwrap();
+
+        let result = generate(dir.path()).unwrap();
+        assert_eq!(result.module_count, 1);
+        assert!(result.total_bytes > 0);
+        assert!(result.artifact_dir.join("manifest.json").exists());
+        assert!(result.artifact_dir.join("package-metadata.bcs").exists());
+        assert!(result
+            .artifact_dir
+            .join("bytecode")
+            .join("counter.mv")
+            .exists());
+        assert_eq!(result.metadata.upgrade_policy, UpgradePolicy::Compatible);
+        assert_eq!(result.metadata.named_addresses.len(), 1);
+    }
+
+    #[test]
+    fn find_package_build_fallback_to_first_dir_with_bytecode() {
+        let dir = TempDir::new().unwrap();
+        let build_dir = dir.path().join("build");
+        let pkg_dir = build_dir.join("fallback_pkg");
+        let bc_dir = pkg_dir.join("bytecode_modules");
+        fs::create_dir_all(&bc_dir).unwrap();
+        fs::write(bc_dir.join("mod.mv"), b"bytes").unwrap();
+        // No Move.toml — should fall back to directory scan
+        let (name, path) = find_package_build(&build_dir).unwrap();
+        assert_eq!(name, "fallback_pkg");
+        assert_eq!(path, pkg_dir);
+    }
+
+    #[test]
+    fn find_package_build_errors_when_empty() {
+        let dir = TempDir::new().unwrap();
+        let build_dir = dir.path().join("build");
+        fs::create_dir(&build_dir).unwrap();
+        let result = find_package_build(&build_dir);
+        assert!(result.is_err());
+    }
+
+    // ── load_build_modules ──────────────────────────────────────────
+
+    #[test]
+    fn load_build_modules_ignores_non_dir_entries() {
+        let dir = TempDir::new().unwrap();
+        let build_dir = dir.path().join("build");
+        fs::create_dir(&build_dir).unwrap();
+        // Create a file instead of a directory
+        fs::write(build_dir.join("not_a_dir"), b"file").unwrap();
+        let modules = load_build_modules(&build_dir).unwrap();
+        assert!(modules.is_empty());
+    }
+
+    #[test]
+    fn load_artifact_modules_sorted_order() {
+        let dir = TempDir::new().unwrap();
+        let bc_dir = dir.path().join("bytecode");
+        fs::create_dir(&bc_dir).unwrap();
+        fs::write(bc_dir.join("z_mod.mv"), b"Z").unwrap();
+        fs::write(bc_dir.join("a_mod.mv"), b"A").unwrap();
+        let modules = load_artifact_modules(dir.path()).unwrap();
+        assert_eq!(modules.len(), 2);
+        // Should be sorted by filename
+        assert_eq!(modules[0], b"A");
+        assert_eq!(modules[1], b"Z");
+    }
 }

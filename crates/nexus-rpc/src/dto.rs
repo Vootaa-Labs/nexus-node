@@ -6,6 +6,17 @@
 //! DTOs isolate internal domain types from the public HTTP/JSON surface.
 //! No private keys, internal state-machines, or raw crypto material is
 //! exposed through these types.
+//!
+//! # Naming conventions
+//!
+//! | Convention | Rule | Examples |
+//! |-----------|------|----------|
+//! | Casing | `snake_case` for all JSON fields | `tx_digest`, `commit_seq` |
+//! | Transaction identifiers | `tx_digest` (abbreviated) | `TxDigest` / `String` (hex) |
+//! | Block sequence | `sequence` (block-level), `commit_seq` (tx-level) | `BlockHeaderDto.sequence` |
+//! | Timestamps | `*_ms` suffix when raw `u64`, bare when `TimestampMs` | `committed_at_ms`, `timestamp` |
+//! | Hex-encoded | Field or type makes encoding clear | `String` fields = hex |
+//! | Proof metadata | Include `proof_version` + `encoding_format` | `"blake3-merkle-v1"` |
 
 use nexus_primitives::{
     AccountAddress, Amount, CommitSequence, EpochNumber, IntentId, ShardId, TimestampMs, TokenId,
@@ -647,6 +658,10 @@ pub struct StateProofResponse {
     pub commitment_root: String,
     /// Hex-encoded value (if the key exists).
     pub value: Option<String>,
+    /// Proof scheme version (e.g. `"blake3-merkle-v1"`).
+    pub proof_version: String,
+    /// Encoding format (e.g. `"bcs-hex"`).
+    pub encoding_format: String,
     /// Merkle proof details.
     pub proof: MerkleProofDto,
 }
@@ -656,6 +671,10 @@ pub struct StateProofResponse {
 pub struct BatchStateProofResponse {
     /// Hex-encoded commitment root at the time of proof.
     pub commitment_root: String,
+    /// Proof scheme version (e.g. `"blake3-merkle-v1"`).
+    pub proof_version: String,
+    /// Encoding format (e.g. `"bcs-hex"`).
+    pub encoding_format: String,
     /// Individual proofs.
     pub proofs: Vec<SingleProofDto>,
 }
@@ -782,6 +801,7 @@ mod tests {
             status: ExecutionStatus::Success,
             gas_used: 5_000,
             state_changes: vec![],
+            events: vec![],
             timestamp: TimestampMs(1_700_000_000_000),
         };
         let dto: TransactionReceiptDto = receipt.into();
@@ -893,6 +913,332 @@ mod tests {
         let json = serde_json::to_string(&dto).unwrap();
         assert!(json.contains("\"dag_size\":1000"));
     }
+
+    // ── V0.1.15 DTO roundtrip tests ────────────────────────────────────
+
+    #[test]
+    fn roundtrip_block_header_dto() {
+        let dto = BlockHeaderDto {
+            sequence: 42,
+            anchor_digest: "aa".repeat(32),
+            state_root: "bb".repeat(32),
+            epoch: 3,
+            cert_count: 5,
+            tx_count: 10,
+            gas_total: 50_000,
+            committed_at_ms: 1_700_000_000_000,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: BlockHeaderDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(dto, back);
+    }
+
+    #[test]
+    fn roundtrip_block_dto() {
+        let dto = BlockDto {
+            header: BlockHeaderDto {
+                sequence: 1,
+                anchor_digest: "aa".repeat(32),
+                state_root: "bb".repeat(32),
+                epoch: 1,
+                cert_count: 2,
+                tx_count: 1,
+                gas_total: 3000,
+                committed_at_ms: 1_700_000_000_000,
+            },
+            transactions: vec![TxSummaryDto {
+                tx_digest: "cc".repeat(32),
+                gas_used: 3000,
+                status: ExecutionStatusDto::Success,
+            }],
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: BlockDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(dto, back);
+    }
+
+    #[test]
+    fn roundtrip_contract_event_dto() {
+        let dto = ContractEventDto {
+            emitter: "11".repeat(32),
+            event_type: "0x1::coin::DepositEvent".into(),
+            sequence_number: 0,
+            data_hex: "deadbeef".into(),
+            data_json: Some(serde_json::json!({"amount": 100})),
+            tx_digest: "22".repeat(32),
+            block_seq: 5,
+            timestamp_ms: 1_700_000_000_000,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: ContractEventDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(dto, back);
+    }
+
+    #[test]
+    fn contract_event_dto_skips_null_data_json() {
+        let dto = ContractEventDto {
+            emitter: "11".repeat(32),
+            event_type: "0x1::coin::DepositEvent".into(),
+            sequence_number: 0,
+            data_hex: "deadbeef".into(),
+            data_json: None,
+            tx_digest: "22".repeat(32),
+            block_seq: 5,
+            timestamp_ms: 1_700_000_000_000,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        assert!(
+            !json.contains("data_json"),
+            "data_json should be omitted when None"
+        );
+        let back: ContractEventDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.data_json, None);
+    }
+
+    #[test]
+    fn roundtrip_event_query_response() {
+        let dto = EventQueryResponse {
+            events: vec![ContractEventDto {
+                emitter: "11".repeat(32),
+                event_type: "0x1::coin::DepositEvent".into(),
+                sequence_number: 0,
+                data_hex: "ab".into(),
+                data_json: None,
+                tx_digest: "22".repeat(32),
+                block_seq: 1,
+                timestamp_ms: 1_700_000_000_000,
+            }],
+            next_cursor: Some("cursor123".into()),
+            has_more: true,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: EventQueryResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.events.len(), 1);
+        assert_eq!(back.next_cursor.as_deref(), Some("cursor123"));
+        assert!(back.has_more);
+    }
+
+    #[test]
+    fn roundtrip_state_proof_response() {
+        let dto = StateProofResponse {
+            commitment_root: "bb".repeat(32),
+            value: Some("deadbeef".into()),
+            proof_version: "blake3-merkle-v1".into(),
+            encoding_format: "bcs-hex".into(),
+            proof: MerkleProofDto {
+                proof_type: "inclusion".into(),
+                leaf_count: 10,
+                leaf_index: Some(3),
+                siblings: vec!["aa".repeat(32)],
+                left_neighbor: None,
+                right_neighbor: None,
+            },
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: StateProofResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.proof_version, "blake3-merkle-v1");
+        assert_eq!(back.encoding_format, "bcs-hex");
+        assert_eq!(back.value.as_deref(), Some("deadbeef"));
+    }
+
+    #[test]
+    fn roundtrip_provenance_record_dto() {
+        let dto = ProvenanceRecordDto {
+            provenance_id: "aa".repeat(32),
+            session_id: "bb".repeat(32),
+            agent_id: "cc".repeat(32),
+            parent_agent_id: None,
+            intent_hash: "dd".repeat(32),
+            plan_hash: "ee".repeat(32),
+            tx_hash: Some("ff".repeat(32)),
+            status: "Committed".into(),
+            created_at_ms: 1_700_000_000_000,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: ProvenanceRecordDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.provenance_id, dto.provenance_id);
+        assert_eq!(back.status, "Committed");
+        assert!(back.parent_agent_id.is_none());
+    }
+
+    #[test]
+    fn roundtrip_session_dto() {
+        let dto = SessionDto {
+            session_id: "aa".repeat(32),
+            state: "Received".into(),
+            created_at_ms: 1_700_000_000_000,
+            plan_hash: Some("bb".repeat(32)),
+            confirmation_ref: None,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: SessionDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.session_id, dto.session_id);
+        assert_eq!(back.state, "Received");
+        assert!(back.plan_hash.is_some());
+        assert!(back.confirmation_ref.is_none());
+    }
+
+    #[test]
+    fn roundtrip_chain_head_dto() {
+        let dto = ChainHeadDto {
+            sequence: 42,
+            anchor_digest: "ab".repeat(32),
+            state_root: "cd".repeat(32),
+            epoch: 3,
+            round: 100,
+            cert_count: 4,
+            tx_count: 10,
+            gas_total: 50_000,
+            committed_at_ms: 1_700_000_000_000,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: ChainHeadDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.sequence, 42);
+        assert_eq!(back.epoch, 3);
+        assert_eq!(back.gas_total, 50_000);
+    }
+
+    #[test]
+    fn roundtrip_shard_topology_dto() {
+        let dto = ShardTopologyDto {
+            num_shards: 4,
+            shards: vec![
+                ShardInfoDto {
+                    shard_id: 0,
+                    validators: vec![0, 1],
+                },
+                ShardInfoDto {
+                    shard_id: 1,
+                    validators: vec![2, 3],
+                },
+            ],
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: ShardTopologyDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.num_shards, 4);
+        assert_eq!(back.shards.len(), 2);
+        assert_eq!(back.shards[0].validators, vec![0, 1]);
+    }
+
+    #[test]
+    fn roundtrip_shard_chain_head_dto() {
+        let dto = ShardChainHeadDto {
+            shard_id: 2,
+            sequence: 100,
+            anchor_digest: "ee".repeat(32),
+            epoch: 5,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: ShardChainHeadDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, dto);
+    }
+
+    #[test]
+    fn roundtrip_htlc_lock_dto() {
+        let dto = HtlcLockDto {
+            lock_digest: "ff".repeat(32),
+            sender: "aa".repeat(32),
+            recipient: "bb".repeat(32),
+            amount: 1_000_000,
+            target_shard: 0,
+            timeout_epoch: 10,
+            status: HtlcStatusDto::Pending,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: HtlcLockDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, dto);
+    }
+
+    #[test]
+    fn roundtrip_htlc_pending_list_dto() {
+        let dto = HtlcPendingListDto {
+            locks: vec![HtlcLockDto {
+                lock_digest: "ff".repeat(32),
+                sender: "aa".repeat(32),
+                recipient: "bb".repeat(32),
+                amount: 500,
+                target_shard: 1,
+                timeout_epoch: 20,
+                status: HtlcStatusDto::Claimed,
+            }],
+            total: 1,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: HtlcPendingListDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.total, 1);
+        assert_eq!(back.locks[0].status, HtlcStatusDto::Claimed);
+    }
+
+    #[test]
+    fn roundtrip_zk_proof_dto() {
+        let dto = ZkProofDto {
+            block_seq: 42,
+            proof_version: "none".into(),
+            encoding_format: "unavailable".into(),
+            proof_bytes_hex: None,
+            verifier_key_hash: None,
+            status: "unavailable".into(),
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: ZkProofDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, dto);
+    }
+
+    #[test]
+    fn roundtrip_account_state_proof_dto() {
+        let dto = AccountStateProofDto {
+            address: "cc".repeat(32),
+            balance: 1_000_000,
+            nonce: 5,
+            state_root: "dd".repeat(32),
+            proof_version: "blake3-merkle-v1".into(),
+            proof: MerkleProofDto {
+                proof_type: "inclusion".into(),
+                leaf_count: 10,
+                leaf_index: Some(3),
+                siblings: vec!["aa".repeat(32)],
+                left_neighbor: None,
+                right_neighbor: None,
+            },
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: AccountStateProofDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.address, "cc".repeat(32));
+        assert_eq!(back.balance, 1_000_000);
+        assert_eq!(back.nonce, 5);
+    }
+
+    #[test]
+    fn roundtrip_validator_info_dto() {
+        let dto = ValidatorInfoDto {
+            index: nexus_primitives::ValidatorIndex(0),
+            public_key_hex: "aa".repeat(16),
+            stake: nexus_primitives::Amount(1_000_000),
+            reputation: 9500,
+            is_slashed: false,
+            shard_id: Some(nexus_primitives::ShardId(0)),
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: ValidatorInfoDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.index, nexus_primitives::ValidatorIndex(0));
+        assert_eq!(back.reputation, 9500);
+    }
+
+    #[test]
+    fn roundtrip_epoch_info_dto() {
+        let dto = EpochInfoDto {
+            epoch: nexus_primitives::EpochNumber(3),
+            epoch_started_at: nexus_primitives::TimestampMs(1_700_000_000_000),
+            committee_size: 7,
+            epoch_commits: 500,
+            epoch_length_commits: 10_000,
+            epoch_length_seconds: 86_400,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: EpochInfoDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.epoch, nexus_primitives::EpochNumber(3));
+        assert_eq!(back.committee_size, 7);
+    }
 }
 
 // ── Shard topology DTOs (W-5) ───────────────────────────────────────────
@@ -985,4 +1331,129 @@ pub struct TxLifecycleDto {
     pub consensus_included_at: Option<TimestampMs>,
     /// Timestamp when the local receipt query path first observed the receipt.
     pub receipt_visible_at: Option<TimestampMs>,
+}
+
+// ── Block DTOs (v0.1.15) ────────────────────────────────────────────────────
+
+/// Block header summary for `GET /v2/block/:seq/header`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BlockHeaderDto {
+    /// Commit sequence number.
+    pub sequence: u64,
+    /// Anchor digest (hex).
+    pub anchor_digest: String,
+    /// State root after this block (hex).
+    pub state_root: String,
+    /// Epoch this block belongs to.
+    pub epoch: u64,
+    /// Number of certificates in the sub-DAG.
+    pub cert_count: usize,
+    /// Number of transactions executed.
+    pub tx_count: usize,
+    /// Total gas consumed.
+    pub gas_total: u64,
+    /// Commit timestamp (Unix ms).
+    pub committed_at_ms: u64,
+}
+
+/// Lightweight transaction summary within a block.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TxSummaryDto {
+    /// Transaction digest (hex).
+    pub tx_digest: String,
+    /// Gas consumed by this transaction.
+    pub gas_used: u64,
+    /// Execution status.
+    pub status: ExecutionStatusDto,
+}
+
+/// Full block content for `GET /v2/block/:seq`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BlockDto {
+    /// Block header.
+    pub header: BlockHeaderDto,
+    /// Transactions in this block.
+    pub transactions: Vec<TxSummaryDto>,
+}
+
+/// Batch receipts for `GET /v2/block/:seq/receipts`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockReceiptsDto {
+    /// Commit sequence number.
+    pub block_seq: u64,
+    /// Individual transaction receipts.
+    pub receipts: Vec<TransactionReceiptDto>,
+    /// Total gas consumed by all transactions.
+    pub total_gas: u64,
+}
+
+/// ZK proof placeholder for `GET /v2/block/:seq/zk-proof`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ZkProofDto {
+    /// Commit sequence number.
+    pub block_seq: u64,
+    /// Proof scheme version (e.g. "none", "plonky3-v1").
+    pub proof_version: String,
+    /// Encoding format (e.g. "unavailable").
+    pub encoding_format: String,
+    /// Hex-encoded proof bytes (if available).
+    pub proof_bytes_hex: Option<String>,
+    /// Hex-encoded verifier key hash (if available).
+    pub verifier_key_hash: Option<String>,
+    /// Proof status: "unavailable", "pending", or "ready".
+    pub status: String,
+}
+
+// ── Account State Proof DTO (v0.1.15) ───────────────────────────────────
+
+/// Account state with Merkle inclusion proof for `GET /v2/account/:addr/state-proof`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountStateProofDto {
+    /// Account address (hex).
+    pub address: String,
+    /// Native token balance.
+    pub balance: u64,
+    /// Account nonce (sequence number).
+    pub nonce: u64,
+    /// Current commitment root (hex).
+    pub state_root: String,
+    /// Proof scheme version.
+    pub proof_version: String,
+    /// Merkle inclusion/exclusion proof.
+    pub proof: MerkleProofDto,
+}
+
+// ── Contract Event DTOs (v0.1.15) ───────────────────────────────────────
+
+/// A single contract event emitted during Move execution.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ContractEventDto {
+    /// Contract address that emitted the event (hex).
+    pub emitter: String,
+    /// Move type tag (e.g. `"0x1::coin::DepositEvent"`).
+    pub event_type: String,
+    /// Sequence number within the emitting account.
+    pub sequence_number: u64,
+    /// Hex-encoded BCS event payload.
+    pub data_hex: String,
+    /// Best-effort JSON decode of the BCS payload (`None` if decode fails).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_json: Option<serde_json::Value>,
+    /// Transaction digest that produced this event (hex).
+    pub tx_digest: String,
+    /// Block commit sequence where this event was committed.
+    pub block_seq: u64,
+    /// Commit timestamp in milliseconds.
+    pub timestamp_ms: u64,
+}
+
+/// Paginated response for event queries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventQueryResponse {
+    /// Events matching the query.
+    pub events: Vec<ContractEventDto>,
+    /// Opaque cursor for the next page (`None` when no more results).
+    pub next_cursor: Option<String>,
+    /// Whether more results are available beyond this page.
+    pub has_more: bool,
 }

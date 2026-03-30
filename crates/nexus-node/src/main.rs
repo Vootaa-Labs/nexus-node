@@ -234,11 +234,8 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
         );
 
         readiness.genesis_handle().set_ready();
-        let outcome = if genesis_already_applied {
-            nexus_node::startup_report::GenesisOutcome::AlreadyApplied
-        } else {
-            nexus_node::startup_report::GenesisOutcome::Applied
-        };
+        let outcome =
+            nexus_node::startup_report::genesis_outcome_from_boot(genesis_already_applied);
         (boot.committee, boot.num_shards, boot.chain_id, outcome)
     } else {
         // dev_mode guard enforced in main(); reaching here means dev_mode is true.
@@ -448,21 +445,41 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
         .cloned()
         .unwrap_or_else(SharedChainHead::new);
 
+    // Create commitment tracker early so it can be shared with the query
+    // backend (account state proofs), the RPC layer (proof queries), and
+    // the execution bridge (state updates).
+    let commitment_tracker = nexus_node::commitment_tracker::new_shared_tracker_with_persistence(
+        store.clone(),
+        config.storage.commitment_cache_size,
+    )
+    .context("failed to initialise persistent commitment tracker")?;
+
     let query_backend = Arc::new(
         StorageQueryBackend::new(store.clone(), epoch.clone(), commit_seq.clone())
             .with_peer_count({
                 let disc = net_handle.discovery.clone();
                 Arc::new(move || disc.routing_health().known_peers)
             })
-            .with_chain_head(rpc_chain_head)
+            .with_chain_head(rpc_chain_head.clone())
             .with_readiness(readiness.clone())
             .with_gas_budget(config.rpc.query_gas_budget)
-            .with_num_shards(num_shards),
+            .with_num_shards(num_shards)
+            .with_commitment_tracker(commitment_tracker.clone()),
+    );
+
+    let block_backend: Arc<dyn nexus_rpc::BlockBackend> = Arc::new(
+        nexus_node::backends::StorageBlockBackend::new(store.clone(), rpc_chain_head),
+    );
+
+    let event_backend: Arc<dyn nexus_rpc::EventBackend> = Arc::new(
+        nexus_node::backends::StorageEventBackend::new(store.clone()),
     );
 
     let mut consensus_backend = LiveConsensusBackend::new(engine)
         .with_epoch_manager(epoch_manager.clone())
-        .with_store(store.clone());
+        .with_store(store.clone())
+        .with_num_shards(num_shards)
+        .with_devnet_mode(config.rpc.faucet_enabled);
     let engine_handle = consensus_backend.engine(); // shared with consensus bridge
 
     // ── 8. Spawn intent service ─────────────────────────────────────────
@@ -493,14 +510,6 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
 
     // Benchmark lifecycle tracker – bounded in-memory LRU for tx latency observation.
     let tx_lifecycle = Arc::new(nexus_rpc::TxLifecycleRegistry::new(100_000));
-
-    // Create commitment tracker early so it can be shared with both
-    // the RPC layer (proof queries) and the execution bridge (state updates).
-    let commitment_tracker = nexus_node::commitment_tracker::new_shared_tracker_with_persistence(
-        store.clone(),
-        config.storage.commitment_cache_size,
-    )
-    .context("failed to initialise persistent commitment tracker")?;
 
     // Install Prometheus metrics recorder so metrics::counter! et al.
     // are captured and can be scraped via GET /metrics.
@@ -562,7 +571,9 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
         .session_provenance(session_provenance_backend)
         .state_proof(Arc::new(nexus_node::backends::LiveStateProofBackend::new(
             commitment_tracker.clone(),
-        )));
+        )))
+        .block_backend(block_backend)
+        .event_backend(event_backend);
 
     if config.rpc.rate_limit_enabled {
         builder = builder.rate_limit(
@@ -665,11 +676,9 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
             bootstrap = disc_result.bootstrap_initiated,
             "validator discovery complete"
         );
-        Some(nexus_node::startup_report::DiscoveryOutcome {
-            validators_seeded: disc_result.validators_seeded,
-            boot_nodes_added: disc_result.boot_nodes_added,
-            bootstrap_initiated: disc_result.bootstrap_initiated,
-        })
+        Some(nexus_node::startup_report::DiscoveryOutcome::from(
+            disc_result,
+        ))
     } else {
         None
     };
@@ -809,25 +818,26 @@ async fn run(config: NodeConfig) -> anyhow::Result<()> {
     let _net_handle = net_handle;
 
     // ── Startup report ──────────────────────────────────────────────────
-    let startup_report = nexus_node::startup_report::StartupReport {
-        version: env!("CARGO_PKG_VERSION"),
-        dev_mode: config.dev_mode,
-        chain_id: chain_id_str,
-        genesis: genesis_outcome,
-        committee_size,
-        local_validator_index: local_validator_index.0,
-        num_shards,
-        storage_path: config.storage.rocksdb_path.display().to_string(),
-        session_recovery,
-        provenance_recovery,
-        network_discovery,
-        readiness_status: readiness.status().as_str(),
-        proof_backend: nexus_node::startup_report::ProofBackendStatus {
-            enabled: true,
-            rpc_registered: true,
-            execution_bridge_connected: true,
+    let startup_report = nexus_node::startup_report::StartupReport::from_inputs(
+        nexus_node::startup_report::StartupReportInputs {
+            dev_mode: config.dev_mode,
+            chain_id: chain_id_str,
+            genesis: genesis_outcome,
+            committee_size,
+            local_validator_index: local_validator_index.0,
+            num_shards,
+            storage_path: config.storage.rocksdb_path.display().to_string(),
+            session_recovery,
+            provenance_recovery,
+            network_discovery,
+            readiness_status: readiness.status().as_str(),
+            proof_backend: nexus_node::startup_report::ProofBackendStatus {
+                enabled: true,
+                rpc_registered: true,
+                execution_bridge_connected: true,
+            },
         },
-    };
+    );
     startup_report.log();
 
     tracing::info!("all subsystems wired — starting RPC server");

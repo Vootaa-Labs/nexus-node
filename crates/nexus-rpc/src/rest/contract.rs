@@ -183,6 +183,8 @@ mod tests {
             num_shards: 1,
             tx_lifecycle: None,
             htlc: None,
+            block: None,
+            event_backend: None,
         })
     }
 
@@ -237,10 +239,36 @@ mod tests {
             num_shards: 1,
             tx_lifecycle: None,
             htlc: None,
+            block: None,
+            event_backend: None,
         });
         let app = router().with_state(state);
 
         let resp = app.oneshot(make_request()).await.unwrap();
         assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn contract_query_returns_200_on_success() {
+        let state = test_state(
+            ContractQueryResponse {
+                return_value: Some("deadbeef".into()),
+                gas_used: 5,
+                gas_budget: 100,
+            },
+            10_000_000,
+            5_000,
+        );
+        let app = router().with_state(state);
+
+        let resp = app.oneshot(make_request()).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let dto: ContractQueryResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(dto.return_value, Some("deadbeef".into()));
+        assert_eq!(dto.gas_used, 5);
     }
 }

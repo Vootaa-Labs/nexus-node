@@ -312,6 +312,8 @@ impl Default for EpochConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nexus_crypto::{FalconSigner, Signer};
+    use nexus_test_utils::fixtures::crypto::make_falcon_keypair;
 
     // -- ValidatorBitset tests --
 
@@ -401,6 +403,30 @@ mod tests {
         }
     }
 
+    #[test]
+    fn batch_status_ordered() {
+        let status = BatchStatus::Ordered {
+            sequence: CommitSequence(9),
+        };
+        match status {
+            BatchStatus::Ordered { sequence } => assert_eq!(sequence, CommitSequence(9)),
+            other => panic!("expected Ordered, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn batch_status_executed() {
+        let status = BatchStatus::Executed {
+            state_root: nexus_primitives::Blake3Digest([0xAA; 32]),
+        };
+        match status {
+            BatchStatus::Executed { state_root } => {
+                assert_eq!(state_root, nexus_primitives::Blake3Digest([0xAA; 32]));
+            }
+            other => panic!("expected Executed, got {other:?}"),
+        }
+    }
+
     // -- Serialization roundtrip tests --
 
     #[test]
@@ -433,5 +459,137 @@ mod tests {
         let cb2: CommittedBatch = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(cb.sequence, cb2.sequence);
         assert_eq!(cb.certificates.len(), cb2.certificates.len());
+    }
+
+    #[test]
+    fn shoal_vote_and_anchor_serde_roundtrip() {
+        let (sk, vk) = make_falcon_keypair();
+        let vote = ShoalVote {
+            voter: ValidatorIndex(1),
+            round: RoundNumber(2),
+            anchor_cert: nexus_primitives::Blake3Digest([0x11; 32]),
+            signature: FalconSigner::sign(&sk, VOTE_DOMAIN, b"vote-payload"),
+        };
+        let anchor = ShoalAnchor {
+            cert_digest: nexus_primitives::Blake3Digest([0x22; 32]),
+            round: RoundNumber(4),
+            leader: ValidatorIndex(0),
+            reputation_score: ReputationScore::from_f32(0.9),
+        };
+
+        let anchor_json = serde_json::to_string(&anchor).expect("serialize anchor");
+        let anchor2: ShoalAnchor = serde_json::from_str(&anchor_json).expect("deserialize anchor");
+        assert_eq!(anchor.cert_digest, anchor2.cert_digest);
+        assert_eq!(anchor.reputation_score, anchor2.reputation_score);
+
+        let info = ValidatorInfo {
+            index: ValidatorIndex(3),
+            falcon_pub_key: vk,
+            stake: nexus_primitives::Amount(50),
+            reputation: ReputationScore::from_f32(0.7),
+            is_slashed: false,
+            shard_id: Some(ShardId(1)),
+        };
+        let committee = PersistentCommittee {
+            epoch: EpochNumber(8),
+            validators: vec![info.clone()],
+        };
+        let transition = EpochTransition {
+            from_epoch: EpochNumber(8),
+            to_epoch: EpochNumber(9),
+            trigger: EpochTransitionTrigger::Manual,
+            final_commit_count: 12,
+            transitioned_at: TimestampMs(999),
+        };
+
+        let info_json = serde_json::to_string(&info).expect("serialize validator info");
+        let info2: ValidatorInfo =
+            serde_json::from_str(&info_json).expect("deserialize validator info");
+        assert_eq!(info.index, info2.index);
+        assert_eq!(info.stake, info2.stake);
+        assert_eq!(info.shard_id, info2.shard_id);
+
+        let committee_json = serde_json::to_string(&committee).expect("serialize committee");
+        let committee2: PersistentCommittee =
+            serde_json::from_str(&committee_json).expect("deserialize committee");
+        assert_eq!(committee.epoch, committee2.epoch);
+        assert_eq!(committee.validators.len(), committee2.validators.len());
+
+        let transition_json = serde_json::to_string(&transition).expect("serialize transition");
+        let transition2: EpochTransition =
+            serde_json::from_str(&transition_json).expect("deserialize transition");
+        assert_eq!(transition.from_epoch, transition2.from_epoch);
+        assert_eq!(transition.trigger, transition2.trigger);
+        assert_eq!(
+            transition.final_commit_count,
+            transition2.final_commit_count
+        );
+
+        let vote_json = serde_json::to_string(&vote).expect("serialize vote");
+        let vote2: ShoalVote = serde_json::from_str(&vote_json).expect("deserialize vote");
+        assert_eq!(vote.voter, vote2.voter);
+        assert_eq!(vote.round, vote2.round);
+        assert_eq!(vote.anchor_cert, vote2.anchor_cert);
+    }
+
+    #[test]
+    fn reputation_raw_returns_inner_u16() {
+        let r = ReputationScore::from_f32(0.5);
+        // raw() should return the scaled u16 representation.
+        let raw = r.raw();
+        // round-trip: as_f32(raw) ~ 0.5
+        let reconstructed = ReputationScore(raw).as_f32();
+        assert!(
+            (reconstructed - 0.5).abs() < 0.01,
+            "raw round-trip: {reconstructed}"
+        );
+    }
+
+    #[test]
+    fn epoch_config_default_values() {
+        let cfg = EpochConfig::default();
+        assert_eq!(cfg.epoch_length_commits, 10_000);
+        assert_eq!(cfg.epoch_length_seconds, 86_400);
+        assert_eq!(cfg.min_epoch_commits, 100);
+    }
+
+    #[test]
+    fn epoch_transition_trigger_all_variants_serde() {
+        let triggers = [
+            EpochTransitionTrigger::CommitThreshold,
+            EpochTransitionTrigger::TimeElapsed,
+            EpochTransitionTrigger::Manual,
+        ];
+        for t in &triggers {
+            let json = serde_json::to_string(t).expect("serialize trigger");
+            let t2: EpochTransitionTrigger =
+                serde_json::from_str(&json).expect("deserialize trigger");
+            assert_eq!(*t, t2);
+        }
+    }
+
+    #[test]
+    fn bitset_double_set_is_idempotent() {
+        let mut bs = ValidatorBitset::new(8);
+        // set() always returns true for in-range indices.
+        assert!(bs.set(ValidatorIndex(2)));
+        // Setting again still returns true (OR-assign keeps bit set).
+        assert!(bs.set(ValidatorIndex(2)));
+        // Count should still be 1.
+        assert_eq!(bs.count(), 1);
+    }
+
+    #[test]
+    fn batch_status_variants_debug() {
+        // Drive Debug impls to improve region coverage.
+        let s = format!("{:?}", BatchStatus::Pending);
+        assert!(s.contains("Pending"));
+        let s = format!(
+            "{:?}",
+            BatchStatus::Certified {
+                cert_digest: nexus_primitives::Blake3Digest::ZERO
+            }
+        );
+        assert!(s.contains("Certified"));
     }
 }

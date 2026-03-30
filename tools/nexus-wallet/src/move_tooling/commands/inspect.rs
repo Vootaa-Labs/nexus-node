@@ -128,3 +128,148 @@ fn count_mv_files(dir: &PathBuf) -> u32 {
     }
     count
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    // ── find_package_dir ───────────────────────────────────────────
+
+    #[test]
+    fn find_package_dir_finds_first_subdirectory() {
+        let dir = TempDir::new().unwrap();
+        fs::create_dir(dir.path().join("MyPackage")).unwrap();
+        let name = find_package_dir(&dir.path().to_path_buf()).unwrap();
+        assert_eq!(name, "MyPackage");
+    }
+
+    #[test]
+    fn find_package_dir_fails_on_directory_with_only_files() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("not_a_dir.txt"), b"content").unwrap();
+        // No subdirectory → should error.
+        assert!(find_package_dir(&dir.path().to_path_buf()).is_err());
+    }
+
+    #[test]
+    fn find_package_dir_fails_on_empty_directory() {
+        let dir = TempDir::new().unwrap();
+        assert!(find_package_dir(&dir.path().to_path_buf()).is_err());
+    }
+
+    // ── count_mv_files ─────────────────────────────────────────────
+
+    #[test]
+    fn count_mv_files_counts_only_mv_extension() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("alpha.mv"), b"mv1").unwrap();
+        fs::write(dir.path().join("beta.mv"), b"mv2").unwrap();
+        fs::write(dir.path().join("gamma.json"), b"{}").unwrap();
+        fs::write(dir.path().join("delta.txt"), b"x").unwrap();
+
+        let count = count_mv_files(&dir.path().to_path_buf());
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn count_mv_files_returns_zero_for_empty_directory() {
+        let dir = TempDir::new().unwrap();
+        assert_eq!(count_mv_files(&dir.path().to_path_buf()), 0);
+    }
+
+    #[test]
+    fn count_mv_files_returns_zero_for_nonexistent_directory() {
+        let nonexistent = PathBuf::from("/nonexistent/path/xyz");
+        assert_eq!(count_mv_files(&nonexistent), 0);
+    }
+
+    #[test]
+    fn count_mv_files_returns_correct_count() {
+        let dir = TempDir::new().unwrap();
+        for i in 0..5 {
+            fs::write(dir.path().join(format!("m{i}.mv")), b"x").unwrap();
+        }
+        assert_eq!(count_mv_files(&dir.path().to_path_buf()), 5);
+    }
+
+    // ── list_modules ───────────────────────────────────────────────
+
+    #[test]
+    fn list_modules_with_mv_files() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("alpha.mv"), b"code1").unwrap();
+        fs::write(dir.path().join("beta.mv"), b"code2").unwrap();
+        fs::write(dir.path().join("readme.txt"), b"skip").unwrap();
+        let result = list_modules(&dir.path().to_path_buf(), false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn list_modules_verbose_mode() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("m.mv"), b"\xDE\xAD").unwrap();
+        let result = list_modules(&dir.path().to_path_buf(), true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn list_modules_with_dependencies_dir() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("main.mv"), b"main").unwrap();
+        let deps = dir.path().join("dependencies").join("framework");
+        fs::create_dir_all(&deps).unwrap();
+        fs::write(deps.join("dep.mv"), b"dep-code").unwrap();
+        let result = list_modules(&dir.path().to_path_buf(), false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn list_modules_empty_dir() {
+        let dir = TempDir::new().unwrap();
+        let result = list_modules(&dir.path().to_path_buf(), false);
+        assert!(result.is_ok());
+    }
+
+    // ── run (integration-style) ───────────────────────────────────
+
+    #[test]
+    fn run_errors_without_build_dir() {
+        let dir = TempDir::new().unwrap();
+        let args = InspectArgs {
+            package_dir: dir.path().to_path_buf(),
+            verbose: false,
+        };
+        let err = run(args).unwrap_err().to_string();
+        assert!(err.contains("no build/"));
+    }
+
+    #[test]
+    fn run_succeeds_with_build_dir_and_bytecode() {
+        let dir = TempDir::new().unwrap();
+        let pkg = dir.path().join("build").join("my_pkg");
+        let bc = pkg.join("bytecode_modules");
+        fs::create_dir_all(&bc).unwrap();
+        fs::write(bc.join("test.mv"), b"bytecode").unwrap();
+        let args = InspectArgs {
+            package_dir: dir.path().to_path_buf(),
+            verbose: false,
+        };
+        assert!(run(args).is_ok());
+    }
+
+    #[test]
+    fn run_prints_no_bytecode_message_when_missing() {
+        let dir = TempDir::new().unwrap();
+        let pkg = dir.path().join("build").join("my_pkg");
+        fs::create_dir_all(&pkg).unwrap();
+        // No bytecode_modules dir inside
+        let args = InspectArgs {
+            package_dir: dir.path().to_path_buf(),
+            verbose: false,
+        };
+        // Should succeed (prints warning, doesn't error)
+        assert!(run(args).is_ok());
+    }
+}

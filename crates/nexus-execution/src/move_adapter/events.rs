@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 /// This is the canonical DTO that flows into receipts, RPC, WebSocket,
 /// and provenance — no raw VM event format leaks beyond this boundary.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct ContractEvent {
+pub struct ContractEvent {
     /// The contract that emitted the event.
     pub emitter: AccountAddress,
     /// Event type tag (e.g. `"counter::IncrementEvent"`).
@@ -30,7 +30,7 @@ pub(crate) struct ContractEvent {
 
 /// Accumulator for events produced during a single transaction execution.
 #[derive(Debug, Default)]
-pub(crate) struct EventAccumulator {
+pub struct EventAccumulator {
     events: Vec<ContractEvent>,
     /// Per-account sequence counters.
     seq: std::collections::HashMap<AccountAddress, u64>,

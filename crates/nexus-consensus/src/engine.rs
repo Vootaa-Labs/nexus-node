@@ -369,9 +369,39 @@ mod tests {
     use super::*;
     use crate::certificate::{cert_signing_payload, CertificateBuilder};
     use crate::error::ConsensusError;
+    use crate::persist::{DagPersistSync, PersistError};
+    use crate::types::EpochTransitionTrigger;
     use crate::types::{ReputationScore, ValidatorBitset, ValidatorInfo, CERT_DOMAIN};
     use nexus_crypto::{FalconSigner, FalconSigningKey, FalconVerifyKey, Signer};
     use nexus_primitives::{Amount, Blake3Digest, CommitSequence, RoundNumber, ValidatorIndex};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct PersistRecorder {
+        persisted: Mutex<Vec<nexus_primitives::CertDigest>>,
+        deleted: Mutex<Vec<Vec<nexus_primitives::CertDigest>>>,
+        purged_epochs: Mutex<Vec<EpochNumber>>,
+    }
+
+    impl DagPersistSync for Arc<PersistRecorder> {
+        fn persist_sync(&self, cert: &NarwhalCertificate) -> Result<(), PersistError> {
+            self.persisted.lock().unwrap().push(cert.cert_digest);
+            Ok(())
+        }
+
+        fn delete_sync(
+            &self,
+            digests: &[nexus_primitives::CertDigest],
+        ) -> Result<(), PersistError> {
+            self.deleted.lock().unwrap().push(digests.to_vec());
+            Ok(())
+        }
+
+        fn purge_by_epoch(&self, target_epoch: EpochNumber) -> Result<usize, PersistError> {
+            self.purged_epochs.lock().unwrap().push(target_epoch);
+            Ok(1)
+        }
+    }
 
     struct TestHarness {
         engine: ConsensusEngine,
@@ -459,6 +489,11 @@ mod tests {
                 signers: ValidatorBitset::new(self.keys.len() as u32),
                 cert_digest,
             }
+        }
+
+        fn committee_for_epoch(&self, epoch: EpochNumber) -> Committee {
+            let validators: Vec<_> = self.engine.committee().all_validators().to_vec();
+            Committee::new(epoch, validators).expect("test committee")
         }
     }
 
@@ -671,5 +706,102 @@ mod tests {
         // 3. Valid cert should still work.
         let good = h.genesis_cert(0, 10);
         assert!(h.engine.insert_verified_certificate(good).is_ok());
+    }
+
+    #[test]
+    fn engine_debug_reports_key_runtime_state() {
+        let persist = Arc::new(PersistRecorder::default());
+        let h = TestHarness::new(4);
+        let engine = ConsensusEngine::new_with_persistence(
+            EpochNumber(1),
+            h.committee_for_epoch(EpochNumber(1)),
+            Box::new(persist),
+        );
+
+        let debug = format!("{engine:?}");
+        assert!(debug.contains("ConsensusEngine"));
+        assert!(debug.contains("epoch"));
+        assert!(debug.contains("dag_size"));
+        assert!(debug.contains("Some(..)"));
+    }
+
+    #[test]
+    fn advance_epoch_resets_runtime_state_and_returns_remaining_batches() {
+        let mut h = TestHarness::new(4);
+
+        let g0 = h.genesis_cert(0, 10);
+        let g1 = h.genesis_cert(1, 11);
+        let d0 = g0.cert_digest;
+        let d1 = g1.cert_digest;
+        h.engine.insert_verified_certificate(g0).unwrap();
+        h.engine.insert_verified_certificate(g1).unwrap();
+        let r1 = h.build_cert(0, 1, vec![d0, d1], 20);
+        assert!(h.engine.process_certificate(r1).unwrap());
+
+        let next_committee = h.committee_for_epoch(EpochNumber(2));
+        let (transition, remaining) = h
+            .engine
+            .advance_epoch(next_committee, EpochTransitionTrigger::Manual);
+
+        assert_eq!(transition.from_epoch, EpochNumber(1));
+        assert_eq!(transition.to_epoch, EpochNumber(2));
+        assert_eq!(transition.trigger, EpochTransitionTrigger::Manual);
+        assert_eq!(transition.final_commit_count, 1);
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].sequence, CommitSequence(0));
+        assert_eq!(h.engine.epoch(), EpochNumber(2));
+        assert_eq!(h.engine.dag_size(), 0);
+        assert_eq!(h.engine.pending_commits(), 0);
+        assert_eq!(h.engine.committee().epoch(), EpochNumber(2));
+        assert_eq!(h.engine.total_commits(), 0);
+    }
+
+    #[test]
+    fn advance_epoch_with_zero_retention_deletes_current_epoch_digests() {
+        let persist = Arc::new(PersistRecorder::default());
+        let mut h = TestHarness::new(4);
+        h.engine = ConsensusEngine::new_with_persistence(
+            EpochNumber(1),
+            h.committee_for_epoch(EpochNumber(1)),
+            Box::new(persist.clone()),
+        );
+
+        let g0 = h.genesis_cert(0, 10);
+        let g1 = h.genesis_cert(1, 11);
+        let expected = vec![g0.cert_digest, g1.cert_digest];
+        h.engine.insert_verified_certificate(g0).unwrap();
+        h.engine.insert_verified_certificate(g1).unwrap();
+
+        let next_committee = h.committee_for_epoch(EpochNumber(2));
+        let _ = h
+            .engine
+            .advance_epoch(next_committee, EpochTransitionTrigger::CommitThreshold);
+
+        let deleted = persist.deleted.lock().unwrap();
+        assert_eq!(deleted.len(), 1);
+        // Compare as sets: HashMap iteration order for the DAG is non-deterministic.
+        let actual_set: std::collections::HashSet<_> = deleted[0].iter().copied().collect();
+        let expected_set: std::collections::HashSet<_> = expected.into_iter().collect();
+        assert_eq!(actual_set, expected_set);
+        assert_eq!(persist.purged_epochs.lock().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn advance_epoch_with_retention_purges_cutoff_epoch() {
+        let persist = Arc::new(PersistRecorder::default());
+        let h = TestHarness::new(4);
+        let mut engine = ConsensusEngine::new_with_persistence_and_retention(
+            EpochNumber(5),
+            h.committee_for_epoch(EpochNumber(5)),
+            Box::new(persist.clone()),
+            2,
+        );
+
+        let next_committee = h.committee_for_epoch(EpochNumber(6));
+        let _ = engine.advance_epoch(next_committee, EpochTransitionTrigger::TimeElapsed);
+
+        let purged_epochs = persist.purged_epochs.lock().unwrap();
+        assert_eq!(*purged_epochs, vec![EpochNumber(3)]);
+        assert_eq!(persist.deleted.lock().unwrap().len(), 0);
     }
 }

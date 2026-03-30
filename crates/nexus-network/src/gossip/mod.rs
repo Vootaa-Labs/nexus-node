@@ -561,4 +561,70 @@ mod tests {
         // 4 global + 2 shard topics (tx + cert for shard 0)
         assert_eq!(topics.len(), 6);
     }
+
+    // ── Additional TopicRegistry coverage ────────────────────────────────
+
+    #[test]
+    fn resolve_hash_unknown_returns_none() {
+        let registry = TopicRegistry::new();
+        let fake_hash = TopicHash::from_raw("/nexus/nonexistent/1.0");
+        assert!(registry.resolve_hash(&fake_hash).is_none());
+    }
+
+    #[test]
+    fn register_existing_global_topic_returns_false() {
+        let mut registry = TopicRegistry::new();
+        // Consensus is already registered
+        assert!(!registry.register(Topic::Consensus));
+    }
+
+    #[test]
+    fn get_topic_hash_unknown_returns_none() {
+        let registry = TopicRegistry::new();
+        assert!(registry
+            .get_topic_hash(&Topic::ShardedTransaction(99))
+            .is_none());
+    }
+
+    #[test]
+    fn mark_subscribed_then_unsubscribed() {
+        let registry = TopicRegistry::new();
+        registry.mark_subscribed(Topic::Intent);
+        assert!(registry.is_subscribed(&Topic::Intent));
+        registry.mark_unsubscribed(Topic::Intent);
+        assert!(!registry.is_subscribed(&Topic::Intent));
+    }
+
+    #[test]
+    fn default_topic_registry_equals_new() {
+        let a = TopicRegistry::default();
+        let b = TopicRegistry::new();
+        assert_eq!(a.registered_topics().len(), b.registered_topics().len());
+    }
+
+    #[test]
+    fn inject_local_to_unregistered_topic_is_noop() {
+        let config = NetworkConfig::for_testing();
+        let (handle, _service) = GossipService::new(&config);
+        // Injecting to a topic with no receiver should not panic
+        handle.inject_local(Topic::ShardedTransaction(999), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn gossip_service_take_cmd_rx() {
+        let config = NetworkConfig::for_testing();
+        let (_handle, mut service) = GossipService::new(&config);
+        // First take should succeed
+        assert!(service.take_cmd_rx().is_some());
+        // Second should return None
+        assert!(service.take_cmd_rx().is_none());
+    }
+
+    #[test]
+    fn topic_receiver_creates_channel_on_demand() {
+        let config = NetworkConfig::for_testing();
+        let (handle, _service) = GossipService::new(&config);
+        // Get receiver for a topic not pre-created
+        let _rx = handle.topic_receiver(Topic::ShardedCertificate(42));
+    }
 }

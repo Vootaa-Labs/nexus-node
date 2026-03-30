@@ -82,7 +82,7 @@ async fn shard_chain_head(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rest::test_helpers::mock_state;
+    use crate::rest::test_helpers::{mock_state, mock_state_with_consensus, MockConsensusBackend};
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
@@ -115,5 +115,37 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn shard_chain_head_returns_404_for_invalid_shard_id() {
+        // num_shards = 1, so shard_id=5 is out of range.
+        let backend = MockConsensusBackend::new();
+        let app = router().with_state(mock_state_with_consensus(backend));
+        let req = Request::builder()
+            .uri("/v2/shards/5/head")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn shard_topology_returns_200_with_consensus_backend() {
+        // ConsensusBackend::shard_topology has default impl that returns
+        // Unavailable, so the handler falls through to the static fallback.
+        let backend = MockConsensusBackend::new();
+        let app = router().with_state(mock_state_with_consensus(backend));
+        let req = Request::builder()
+            .uri("/v2/shards")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let dto: ShardTopologyDto = serde_json::from_slice(&body).unwrap();
+        assert_eq!(dto.num_shards, 1);
     }
 }

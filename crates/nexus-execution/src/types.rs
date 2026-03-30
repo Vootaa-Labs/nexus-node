@@ -240,6 +240,9 @@ pub struct TransactionReceipt {
     pub gas_used: u64,
     /// State mutations produced.
     pub state_changes: Vec<StateChange>,
+    /// Contract events emitted during execution.
+    #[serde(default)]
+    pub events: Vec<crate::move_adapter::events::ContractEvent>,
     /// Wall-clock time of execution.
     pub timestamp: TimestampMs,
 }

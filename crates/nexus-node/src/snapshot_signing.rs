@@ -256,4 +256,107 @@ mod tests {
         let err = verify_manifest(&manifest, &vk).unwrap_err();
         assert!(matches!(err, SnapshotSignError::UnsupportedScheme(_)));
     }
+
+    #[test]
+    fn verify_rejects_missing_public_key() {
+        let (sk, vk) = FalconSigner::generate_keypair();
+        let mut manifest = SnapshotManifest {
+            version: 1,
+            block_height: 1,
+            entry_count: 0,
+            total_bytes: 0,
+            content_hash: None,
+            signature: None,
+            signer_public_key: None,
+            signature_scheme: None,
+            chain_id: None,
+            epoch: None,
+            created_at_ms: None,
+            previous_manifest_hash: None,
+        };
+        sign_manifest(&mut manifest, &sk, &vk);
+        manifest.signer_public_key = None;
+        let err = verify_manifest(&manifest, &vk).unwrap_err();
+        assert!(matches!(err, SnapshotSignError::MissingPublicKey));
+    }
+
+    #[test]
+    fn verify_rejects_missing_scheme() {
+        let (sk, vk) = FalconSigner::generate_keypair();
+        let mut manifest = SnapshotManifest {
+            version: 1,
+            block_height: 1,
+            entry_count: 0,
+            total_bytes: 0,
+            content_hash: None,
+            signature: None,
+            signer_public_key: None,
+            signature_scheme: None,
+            chain_id: None,
+            epoch: None,
+            created_at_ms: None,
+            previous_manifest_hash: None,
+        };
+        sign_manifest(&mut manifest, &sk, &vk);
+        manifest.signature_scheme = None;
+        let err = verify_manifest(&manifest, &vk).unwrap_err();
+        assert!(matches!(err, SnapshotSignError::MissingScheme));
+    }
+
+    #[test]
+    fn verify_rejects_invalid_signature_bytes() {
+        let (sk, vk) = FalconSigner::generate_keypair();
+        let mut manifest = SnapshotManifest {
+            version: 1,
+            block_height: 1,
+            entry_count: 0,
+            total_bytes: 0,
+            content_hash: None,
+            signature: None,
+            signer_public_key: None,
+            signature_scheme: None,
+            chain_id: None,
+            epoch: None,
+            created_at_ms: None,
+            previous_manifest_hash: None,
+        };
+        sign_manifest(&mut manifest, &sk, &vk);
+        manifest.signature = Some(vec![0xFF; 10]);
+        let err = verify_manifest(&manifest, &vk).unwrap_err();
+        // Falcon-512 signature is a specific length; short bytes may be
+        // rejected as InvalidSignature or VerificationFailed.
+        assert!(
+            matches!(
+                err,
+                SnapshotSignError::InvalidSignature(_) | SnapshotSignError::VerificationFailed(_)
+            ),
+            "unexpected error: {err:?}"
+        );
+    }
+
+    #[test]
+    fn verify_snapshot_file_errors_on_nonexistent_path() {
+        let (_sk, vk) = FalconSigner::generate_keypair();
+        let err = verify_snapshot_file(std::path::Path::new("/tmp/no-such-snapshot-xyz"), &vk)
+            .unwrap_err();
+        assert!(matches!(err, SnapshotSignError::IoError(_)));
+    }
+
+    #[test]
+    fn all_error_variants_display() {
+        let errors = [
+            SnapshotSignError::MissingSignature,
+            SnapshotSignError::MissingScheme,
+            SnapshotSignError::MissingPublicKey,
+            SnapshotSignError::UnsupportedScheme("ed25519".into()),
+            SnapshotSignError::UntrustedSigner,
+            SnapshotSignError::InvalidSignature("bad".into()),
+            SnapshotSignError::VerificationFailed("failed".into()),
+            SnapshotSignError::IoError("io".into()),
+        ];
+        for e in &errors {
+            let msg = format!("{e}");
+            assert!(!msg.is_empty());
+        }
+    }
 }

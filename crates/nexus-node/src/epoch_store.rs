@@ -414,4 +414,40 @@ mod tests {
         assert_eq!(state.epoch, EpochNumber(1));
         assert!(state.election_result.is_none());
     }
+
+    // ── key builder tests ────────────────────────────────────────────
+
+    #[test]
+    fn committee_key_encodes_prefix_and_epoch() {
+        let key = committee_key(EpochNumber(0));
+        assert!(key.starts_with(PREFIX_COMMITTEE));
+        assert_eq!(key.len(), PREFIX_COMMITTEE.len() + 8);
+    }
+
+    #[test]
+    fn transition_key_encodes_prefix_and_epoch() {
+        let key = transition_key(EpochNumber(42));
+        assert!(key.starts_with(PREFIX_TRANSITION));
+        assert_eq!(key.len(), PREFIX_TRANSITION.len() + 8);
+    }
+
+    #[test]
+    fn election_key_encodes_prefix_and_epoch() {
+        let key = election_key(EpochNumber(7));
+        assert!(key.starts_with(PREFIX_ELECTION));
+        assert_eq!(key.len(), PREFIX_ELECTION.len() + 8);
+    }
+
+    #[test]
+    fn election_key_for_matches_election_key() {
+        let epoch = EpochNumber(99);
+        assert_eq!(election_key_for(epoch), election_key(epoch));
+    }
+
+    #[test]
+    fn distinct_epochs_produce_distinct_keys() {
+        let k1 = committee_key(EpochNumber(0));
+        let k2 = committee_key(EpochNumber(1));
+        assert_ne!(k1, k2);
+    }
 }

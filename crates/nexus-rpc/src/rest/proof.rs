@@ -79,6 +79,8 @@ async fn state_proof(
     Ok(Json(StateProofResponse {
         commitment_root: hex::encode(root.0),
         value: value.map(hex::encode),
+        proof_version: "blake3-merkle-v1".into(),
+        encoding_format: "bcs-hex".into(),
         proof: merkle_proof_to_dto(&proof),
     }))
 }
@@ -136,12 +138,14 @@ async fn batch_state_proof(
 
     Ok(Json(BatchStateProofResponse {
         commitment_root: hex::encode(root.0),
+        proof_version: "blake3-merkle-v1".into(),
+        encoding_format: "bcs-hex".into(),
         proofs,
     }))
 }
 
 /// Convert an internal `MerkleProof` to WireDTO.
-fn merkle_proof_to_dto(proof: &nexus_storage::MerkleProof) -> MerkleProofDto {
+pub(crate) fn merkle_proof_to_dto(proof: &nexus_storage::MerkleProof) -> MerkleProofDto {
     match proof {
         nexus_storage::MerkleProof::Inclusion {
             leaf_index,
@@ -297,6 +301,8 @@ mod tests {
             num_shards: 1,
             tx_lifecycle: None,
             htlc: None,
+            block: None,
+            event_backend: None,
         })
     }
 

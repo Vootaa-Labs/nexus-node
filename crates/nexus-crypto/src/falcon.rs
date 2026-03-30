@@ -344,4 +344,101 @@ mod tests {
         let restored = FalconVerifyKey::from_bytes(vk.as_bytes()).unwrap();
         assert_eq!(vk.as_bytes(), restored.as_bytes());
     }
+
+    #[test]
+    fn debug_formats_expose_only_safe_metadata() {
+        let (sk, vk) = FalconSigner::generate_keypair();
+        let sig = FalconSigner::sign(&sk, domains::SHOAL_VOTE, b"debug");
+
+        let verify_debug = format!("{:?}", vk);
+        let signature_debug = format!("{:?}", sig);
+
+        assert!(verify_debug.starts_with("FalconVerifyKey("));
+        assert!(verify_debug.ends_with("…)"));
+        assert_eq!(
+            signature_debug,
+            format!("FalconSignature({}B)", sig.as_bytes().len())
+        );
+    }
+
+    #[test]
+    fn signing_key_from_bytes_rejects_wrong_length() {
+        let err = FalconSigningKey::from_bytes(&[4u8; 12]).unwrap_err();
+        match err {
+            NexusCryptoError::InvalidKey { reason } => {
+                assert!(reason.contains("invalid FALCON-512 secret key length"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn verify_key_from_bytes_rejects_wrong_length() {
+        let err = FalconVerifyKey::from_bytes(&[5u8; 12]).unwrap_err();
+        match err {
+            NexusCryptoError::InvalidKey { reason } => {
+                assert!(reason.contains("invalid FALCON-512 public key length"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn signature_from_bytes_rejects_invalid_length() {
+        let err = FalconSignature::from_bytes(&[6u8; FalconSignature::MAX_SIZE + 1]).unwrap_err();
+        match err {
+            NexusCryptoError::InvalidSignature { reason } => {
+                assert!(reason.contains("max"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn verify_rejects_corrupt_public_key_bytes() {
+        let (sk, _vk) = FalconSigner::generate_keypair();
+        let sig = FalconSigner::sign(&sk, domains::SHOAL_VOTE, b"msg");
+        let corrupt_vk = FalconVerifyKey {
+            bytes: vec![0u8; 1],
+        };
+
+        let err = FalconSigner::verify(&corrupt_vk, domains::SHOAL_VOTE, b"msg", &sig).unwrap_err();
+        match err {
+            NexusCryptoError::InvalidKey { reason } => {
+                assert!(reason.contains("corrupt FALCON-512 public key"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn verify_rejects_corrupt_signature_bytes() {
+        let (_sk, vk) = FalconSigner::generate_keypair();
+        let corrupt_sig = FalconSignature {
+            bytes: vec![0u8; FalconSignature::MAX_SIZE + 1],
+        };
+
+        let err = FalconSigner::verify(&vk, domains::SHOAL_VOTE, b"msg", &corrupt_sig).unwrap_err();
+        match err {
+            NexusCryptoError::InvalidSignature { reason } => {
+                assert!(reason.contains("corrupt FALCON-512 signature bytes"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn batch_verify_empty_input_is_ok() {
+        assert!(FalconSigner::batch_verify(&[]).is_ok());
+    }
+
+    #[test]
+    fn scheme_size_constants_match_encoded_outputs() {
+        let (sk, vk) = FalconSigner::generate_keypair();
+        let sig = FalconSigner::sign(&sk, domains::SHOAL_VOTE, b"size-check");
+
+        assert_eq!(vk.as_bytes().len(), FalconSigner::verify_key_size());
+        assert!(sig.as_bytes().len() <= FalconSigner::signature_size());
+        assert!(sig.as_bytes().len() <= FalconSignature::MAX_SIZE);
+    }
 }

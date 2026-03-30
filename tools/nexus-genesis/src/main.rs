@@ -590,4 +590,156 @@ mod tests {
             assert!(v.shard_id.is_none());
         }
     }
+
+    #[test]
+    fn test_generate_fails_with_nonexistent_key_file() {
+        let dir = TempDir::new().unwrap();
+        let params = GenerateParams {
+            chain_id: "test".to_owned(),
+            num_shards: 1,
+            stake: 1_000_000,
+            validator_keys: vec![PathBuf::from("/nonexistent/path/keys.json")],
+            validator_names: vec![],
+            network_peer_ids: random_peer_ids(1),
+            timestamp: 1,
+            output: dir.path().join("genesis.json"),
+            force: false,
+        };
+        let err = cmd_generate(&params).unwrap_err().to_string();
+        assert!(
+            err.contains("failed to read validator keys"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_generate_fails_with_invalid_key_json() {
+        let dir = TempDir::new().unwrap();
+        let bad_key_file = dir.path().join("bad_keys.json");
+        fs::write(&bad_key_file, b"not valid json {{{{").unwrap();
+
+        let params = GenerateParams {
+            chain_id: "test".to_owned(),
+            num_shards: 1,
+            stake: 1_000_000,
+            validator_keys: vec![bad_key_file],
+            validator_names: vec![],
+            network_peer_ids: random_peer_ids(1),
+            timestamp: 1,
+            output: dir.path().join("genesis.json"),
+            force: false,
+        };
+        let err = cmd_generate(&params).unwrap_err().to_string();
+        assert!(
+            err.contains("failed to parse validator keys"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_check_overwrite_passes_for_absent_file() {
+        let dir = TempDir::new().unwrap();
+        let absent = dir.path().join("nonexistent.json");
+        // File doesn't exist: should pass with force=false too.
+        check_overwrite(&absent, false).unwrap();
+        check_overwrite(&absent, true).unwrap();
+    }
+
+    #[test]
+    fn test_generate_fails_on_peer_id_count_mismatch() {
+        let dir = TempDir::new().unwrap();
+        let params = GenerateParams {
+            chain_id: "test".to_owned(),
+            num_shards: 1,
+            stake: 1_000_000,
+            validator_keys: vec![], // 0 keys
+            validator_names: vec![],
+            network_peer_ids: random_peer_ids(2), // 2 peer ids
+            timestamp: 1,
+            output: dir.path().join("genesis.json"),
+            force: false,
+        };
+        let err = cmd_generate(&params).unwrap_err().to_string();
+        assert!(err.contains("must match"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn test_validate_invalid_structure_genesis() {
+        // Parseable JSON but GenesisConfig whose validate() fails (0 validators).
+        let dir = TempDir::new().unwrap();
+        let output = dir.path().join("invalid_genesis.json");
+
+        // Write a GenesisConfig-shaped JSON with 0 validators (will fail validate()).
+        let bad_json = r#"{
+            "chain_id": "test",
+            "genesis_timestamp": 1000,
+            "num_shards": 1,
+            "validators": [],
+            "allocations": [],
+            "consensus": {
+                "epoch_length_commits": 10000,
+                "epoch_length_seconds": 86400,
+                "min_epoch_commits": 100,
+                "validator_election_epoch_interval": 1
+            }
+        }"#;
+        fs::write(&output, bad_json).unwrap();
+        let err = cmd_validate(&output).unwrap_err().to_string();
+        assert!(
+            err.contains("validation") || err.contains("validator"),
+            "unexpected: {err}"
+        );
+    }
+
+    #[test]
+    fn test_write_genesis_json_no_parent() {
+        // When the path has no parent component (e.g. a relative filename in cwd).
+        let dir = TempDir::new().unwrap();
+        let output = dir.path().join("flat.json");
+        let config = nexus_config::GenesisConfig::for_testing();
+        write_genesis_json(&config, &output).unwrap();
+        assert!(output.exists());
+    }
+
+    #[test]
+    fn test_generate_with_explicit_stake() {
+        use nexus_crypto::{
+            DilithiumSigner, FalconSigner, KeyEncapsulationMechanism, KyberKem, Signer,
+        };
+
+        let dir = TempDir::new().unwrap();
+        let mut key_paths = Vec::new();
+        for i in 0..4 {
+            let (_, fvk) = FalconSigner::generate_keypair();
+            let (_, dvk) = DilithiumSigner::generate_keypair();
+            let (kek, _) = KyberKem::generate_keypair();
+            let bundle = serde_json::json!({
+                "falcon_verify_key": hex::encode(fvk.as_bytes()),
+                "dilithium_verify_key": hex::encode(dvk.as_bytes()),
+                "kyber_encaps_key": hex::encode(kek.as_bytes()),
+            });
+            let path = dir.path().join(format!("v{i}.json"));
+            fs::write(&path, serde_json::to_string_pretty(&bundle).unwrap()).unwrap();
+            key_paths.push(path);
+        }
+
+        let custom_stake = Amount::ONE_NXS.0 * 5;
+        let output = dir.path().join("genesis.json");
+        cmd_generate(&GenerateParams {
+            chain_id: "stake-test".to_owned(),
+            num_shards: 1,
+            stake: custom_stake,
+            validator_keys: key_paths.clone(),
+            validator_names: vec![],
+            network_peer_ids: random_peer_ids(key_paths.len()),
+            timestamp: 42,
+            output: output.clone(),
+            force: false,
+        })
+        .unwrap();
+
+        let config: nexus_config::GenesisConfig =
+            serde_json::from_str(&fs::read_to_string(&output).unwrap()).unwrap();
+        assert_eq!(config.validators[0].stake.0, custom_stake);
+    }
 }

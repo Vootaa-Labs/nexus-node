@@ -119,6 +119,20 @@ async fn wait_for_dead_letter<S: StateStorage>(store: &S, sequence: u64) -> serd
     panic!("timed out waiting for dead-letter record for sequence {sequence}");
 }
 
+async fn wait_for_receipt<S: StateStorage>(store: &S, tx_digest: &Blake3Digest) -> Vec<u8> {
+    for _ in 0..150 {
+        if let Some(raw) = store
+            .get_sync(ColumnFamily::Receipts.as_str(), tx_digest.as_bytes())
+            .unwrap()
+        {
+            return raw;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    panic!("timed out waiting for receipt {tx_digest}");
+}
+
 struct FailingPersistence;
 
 impl CommitmentPersistSync for FailingPersistence {
@@ -630,7 +644,15 @@ async fn execution_bridge_rejects_commit_seq_when_commitment_persistence_fails()
         test_readiness2.execution_handle(),
     );
 
-    tokio::time::sleep(Duration::from_millis(80)).await;
+    let dead_letter = wait_for_dead_letter(&store, 0).await;
+    assert_eq!(dead_letter["sequence"], 0);
+    let error = dead_letter["error"]
+        .as_str()
+        .expect("dead-letter error should be a string");
+    assert!(
+        error.contains("forced commitment persistence failure"),
+        "dead-letter should preserve the commitment persistence failure reason"
+    );
 
     assert_eq!(commit_seq.load(Ordering::Acquire), u64::MAX);
     assert!(
@@ -642,23 +664,12 @@ async fn execution_bridge_rejects_commit_seq_when_commitment_persistence_fails()
         "failed batch should remain available while it is retried"
     );
 
-    let receipt = store
-        .get_sync(ColumnFamily::Receipts.as_str(), tx.digest.as_bytes())
-        .unwrap();
+    let receipt = wait_for_receipt(&store, &tx.digest).await;
     assert!(
-        receipt.is_some(),
+        !receipt.is_empty(),
         "receipts are persisted before commitment failure"
     );
 
-    let dead_letter = wait_for_dead_letter(&store, 0).await;
-    assert_eq!(dead_letter["sequence"], 0);
-    let error = dead_letter["error"]
-        .as_str()
-        .expect("dead-letter error should be a string");
-    assert!(
-        error.contains("forced commitment persistence failure"),
-        "dead-letter should preserve the commitment persistence failure reason"
-    );
     assert_eq!(commit_seq.load(Ordering::Acquire), u64::MAX);
 
     bridge.abort();

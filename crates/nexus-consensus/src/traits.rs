@@ -154,6 +154,37 @@ pub trait ValidatorRegistry: Send + Sync + 'static {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nexus_test_utils::fixtures::crypto::make_falcon_keypair;
+
+    struct MockRegistry {
+        validators: Vec<ValidatorInfo>,
+    }
+
+    impl ValidatorRegistry for MockRegistry {
+        fn active_validators(&self) -> Vec<ValidatorInfo> {
+            self.validators
+                .iter()
+                .filter(|v| !v.is_slashed)
+                .cloned()
+                .collect()
+        }
+
+        fn validator_info(&self, index: ValidatorIndex) -> Option<ValidatorInfo> {
+            self.validators.iter().find(|v| v.index == index).cloned()
+        }
+
+        fn quorum_threshold(&self) -> nexus_primitives::Amount {
+            nexus_primitives::Amount(1)
+        }
+
+        fn total_stake(&self) -> nexus_primitives::Amount {
+            nexus_primitives::Amount(self.validators.len() as u64)
+        }
+
+        fn is_quorum(&self, _: &ValidatorBitset) -> bool {
+            false
+        }
+    }
 
     // Verify traits are object-safe where needed (BftOrderer uses dyn CertificateDag)
     // CertificateDag cannot be object-safe due to &NarwhalCertificate return types,
@@ -175,27 +206,109 @@ mod tests {
     /// Verify the default is_active implementation logic.
     #[test]
     fn default_is_active_returns_false_for_unknown() {
-        struct EmptyRegistry;
-        impl ValidatorRegistry for EmptyRegistry {
-            fn active_validators(&self) -> Vec<ValidatorInfo> {
-                vec![]
-            }
-            fn validator_info(&self, _: ValidatorIndex) -> Option<ValidatorInfo> {
-                None
-            }
-            fn quorum_threshold(&self) -> nexus_primitives::Amount {
-                nexus_primitives::Amount(1)
-            }
-            fn total_stake(&self) -> nexus_primitives::Amount {
-                nexus_primitives::Amount(0)
-            }
-            fn is_quorum(&self, _: &ValidatorBitset) -> bool {
-                false
-            }
-        }
-
-        let reg = EmptyRegistry;
+        let reg = MockRegistry { validators: vec![] };
         assert!(!reg.is_active(ValidatorIndex(0)));
         assert_eq!(reg.reputation(ValidatorIndex(0)), ReputationScore::ZERO);
+    }
+
+    #[test]
+    fn default_is_active_returns_true_for_known_unslashed_validator() {
+        let (_sk, vk) = make_falcon_keypair();
+        let reg = MockRegistry {
+            validators: vec![ValidatorInfo {
+                index: ValidatorIndex(7),
+                falcon_pub_key: vk,
+                stake: nexus_primitives::Amount(10),
+                reputation: ReputationScore::from_f32(0.8),
+                is_slashed: false,
+                shard_id: None,
+            }],
+        };
+
+        assert!(reg.is_active(ValidatorIndex(7)));
+    }
+
+    #[test]
+    fn default_methods_respect_slashed_and_reputation_values() {
+        let (_sk, vk) = make_falcon_keypair();
+        let rep = ReputationScore::from_f32(0.42);
+        let reg = MockRegistry {
+            validators: vec![ValidatorInfo {
+                index: ValidatorIndex(3),
+                falcon_pub_key: vk,
+                stake: nexus_primitives::Amount(10),
+                reputation: rep,
+                is_slashed: true,
+                shard_id: None,
+            }],
+        };
+
+        assert!(!reg.is_active(ValidatorIndex(3)));
+        assert_eq!(reg.reputation(ValidatorIndex(3)), rep);
+    }
+
+    #[test]
+    fn active_validators_filters_slashed_out() {
+        let (_sk1, vk1) = make_falcon_keypair();
+        let (_sk2, vk2) = make_falcon_keypair();
+        let reg = MockRegistry {
+            validators: vec![
+                ValidatorInfo {
+                    index: ValidatorIndex(0),
+                    falcon_pub_key: vk1,
+                    stake: nexus_primitives::Amount(10),
+                    reputation: ReputationScore::ZERO,
+                    is_slashed: false,
+                    shard_id: None,
+                },
+                ValidatorInfo {
+                    index: ValidatorIndex(1),
+                    falcon_pub_key: vk2,
+                    stake: nexus_primitives::Amount(10),
+                    reputation: ReputationScore::ZERO,
+                    is_slashed: true,
+                    shard_id: None,
+                },
+            ],
+        };
+
+        let active = reg.active_validators();
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].index, ValidatorIndex(0));
+    }
+
+    #[test]
+    fn quorum_threshold_and_total_stake_reflect_validator_count() {
+        let mut validators = Vec::new();
+        for i in 0..3u64 {
+            let (_sk, vk) = make_falcon_keypair();
+            validators.push(ValidatorInfo {
+                index: ValidatorIndex(i as u32),
+                falcon_pub_key: vk,
+                stake: nexus_primitives::Amount(i + 1),
+                reputation: ReputationScore::ZERO,
+                is_slashed: false,
+                shard_id: None,
+            });
+        }
+        let reg = MockRegistry {
+            validators: validators.clone(),
+        };
+
+        assert_eq!(reg.quorum_threshold(), nexus_primitives::Amount(1));
+        assert_eq!(reg.total_stake(), nexus_primitives::Amount(3));
+    }
+
+    #[test]
+    fn is_quorum_mock_always_returns_false() {
+        let reg = MockRegistry { validators: vec![] };
+        let bitset = ValidatorBitset::new(4);
+        assert!(!reg.is_quorum(&bitset));
+    }
+
+    #[test]
+    fn validator_info_returns_none_for_missing_index() {
+        let reg = MockRegistry { validators: vec![] };
+        assert!(reg.validator_info(ValidatorIndex(99)).is_none());
     }
 }

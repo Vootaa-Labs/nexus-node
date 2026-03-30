@@ -668,4 +668,87 @@ mod tests {
             .permissions();
         assert_eq!(perms.mode() & 0o777, 0o600, "identity key should be 0600");
     }
+
+    #[test]
+    fn test_dilithium_keygen_hex() {
+        let dir = TempDir::new().unwrap();
+        generate_dilithium(dir.path(), OutputFormat::Hex, false).unwrap();
+
+        let sk = fs::read_to_string(dir.path().join("dilithium.sk")).unwrap();
+        let vk = fs::read_to_string(dir.path().join("dilithium.vk")).unwrap();
+        assert!(!sk.is_empty());
+        assert!(!vk.is_empty());
+        hex::decode(&sk).expect("dilithium secret key should be valid hex");
+        hex::decode(&vk).expect("dilithium verify key should be valid hex");
+    }
+
+    #[test]
+    fn test_kyber_keygen_hex() {
+        let dir = TempDir::new().unwrap();
+        generate_kyber(dir.path(), OutputFormat::Hex, false).unwrap();
+
+        let sk = fs::read_to_string(dir.path().join("kyber.sk")).unwrap();
+        let vk = fs::read_to_string(dir.path().join("kyber.vk")).unwrap();
+        assert!(!sk.is_empty());
+        assert!(!vk.is_empty());
+        hex::decode(&sk).expect("kyber secret key should be valid hex");
+        hex::decode(&vk).expect("kyber encaps key should be valid hex");
+    }
+
+    #[test]
+    fn test_identity_keygen_force_overwrite() {
+        let dir = TempDir::new().unwrap();
+        generate_identity(dir.path(), false).unwrap();
+        // Second call with force=true should not error.
+        generate_identity(dir.path(), true).unwrap();
+        assert!(dir.path().join("identity.key").exists());
+    }
+
+    #[test]
+    fn test_check_overwrite_passes_when_file_absent() {
+        let dir = TempDir::new().unwrap();
+        let absent = dir.path().join("absent.json");
+        // File does not exist → should succeed regardless of force flag.
+        check_overwrite(&absent, false).unwrap();
+        check_overwrite(&absent, true).unwrap();
+    }
+
+    #[test]
+    fn test_validator_bundle_hex() {
+        // Covers generate_validator_bundle with OutputFormat::Hex.
+        let dir = TempDir::new().unwrap();
+        generate_validator_bundle(dir.path(), OutputFormat::Hex, false).unwrap();
+
+        assert!(dir.path().join("falcon.sk").exists());
+        assert!(dir.path().join("falcon.vk").exists());
+        assert!(dir.path().join("dilithium.sk").exists());
+        assert!(dir.path().join("dilithium.vk").exists());
+        assert!(dir.path().join("kyber.sk").exists());
+        assert!(dir.path().join("kyber.vk").exists());
+        assert!(dir.path().join("validator-public-keys.json").exists());
+    }
+
+    #[test]
+    fn test_generate_falcon_no_overwrite_hex() {
+        // Covers the Hex branch of check_overwrite failure.
+        let dir = TempDir::new().unwrap();
+        generate_falcon(dir.path(), OutputFormat::Hex, false).unwrap();
+        let err = generate_falcon(dir.path(), OutputFormat::Hex, false).unwrap_err();
+        assert!(err.to_string().contains("already exists"), "{err}");
+    }
+
+    #[test]
+    fn test_validator_bundle_overwrite() {
+        let dir = TempDir::new().unwrap();
+        generate_validator_bundle(dir.path(), OutputFormat::Json, false).unwrap();
+        // With force=true should succeed even though files exist.
+        generate_validator_bundle(dir.path(), OutputFormat::Json, true).unwrap();
+    }
+
+    #[test]
+    fn test_ensure_dir_existing() {
+        // ensure_dir on an already-existing directory should succeed.
+        let dir = TempDir::new().unwrap();
+        ensure_dir(dir.path()).unwrap();
+    }
 }

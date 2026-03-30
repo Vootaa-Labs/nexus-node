@@ -46,6 +46,14 @@ pub(crate) fn cf_options(cf: ColumnFamily) -> rocksdb::Options {
             // LZ4 — HTLC locks are small and latency-sensitive for claim/refund.
             opts.set_compression_type(rocksdb::DBCompressionType::Lz4);
         }
+        ColumnFamily::BlockTxIndex => {
+            // LZ4 — block-tx index entries are small and read-latency-sensitive.
+            opts.set_compression_type(rocksdb::DBCompressionType::Lz4);
+        }
+        ColumnFamily::Events => {
+            // LZ4 — event entries are small and latency-sensitive for queries.
+            opts.set_compression_type(rocksdb::DBCompressionType::Lz4);
+        }
     }
     opts
 }

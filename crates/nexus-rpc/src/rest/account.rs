@@ -12,13 +12,15 @@ use axum::routing::get;
 use axum::{Json, Router};
 
 use super::AppState;
-use crate::dto::{AccountBalanceDto, TokenBalanceDto};
+use crate::dto::{AccountBalanceDto, AccountStateProofDto, TokenBalanceDto};
 use crate::error::RpcResult;
 use nexus_primitives::TokenId;
 
 /// Build the account router fragment.
 pub fn router() -> Router<Arc<AppState>> {
-    Router::new().route("/v2/account/:addr/balance", get(account_balance))
+    Router::new()
+        .route("/v2/account/:addr/balance", get(account_balance))
+        .route("/v2/account/:addr/state-proof", get(account_state_proof))
 }
 
 /// `GET /v2/account/{addr}/balance`
@@ -37,6 +39,19 @@ async fn account_balance(
             amount,
         }],
     }))
+}
+
+/// `GET /v2/account/{addr}/state-proof`
+///
+/// Returns the account's balance, nonce, and a Merkle inclusion/exclusion
+/// proof against the current commitment root.
+async fn account_state_proof(
+    State(state): State<Arc<AppState>>,
+    Path(addr_hex): Path<String>,
+) -> RpcResult<Json<AccountStateProofDto>> {
+    let address = super::parse_address(&addr_hex)?;
+    let dto = state.query.account_state_proof(&address)?;
+    Ok(Json(dto))
 }
 
 #[cfg(test)]

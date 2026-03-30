@@ -128,3 +128,87 @@ pub fn run(args: CallArgs) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_args() -> CallArgs {
+        CallArgs {
+            contract: hex::encode([0u8; 32]),
+            function: "counter::increment".into(),
+            args: vec![],
+            type_args: vec![],
+            rpc_url: "http://127.0.0.1:8080".into(),
+            key_file: None,
+            gas_limit: 100_000,
+            nonce: 0,
+            poll_attempts: 1,
+        }
+    }
+
+    #[test]
+    fn run_requires_key_file() {
+        // key_file=None is reached after arg parsing; bail! before network.
+        let err = run(base_args()).unwrap_err().to_string();
+        assert!(err.contains("--key-file"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn run_rejects_invalid_rpc_url() {
+        let mut args = base_args();
+        args.rpc_url = "ws://bad".into();
+        assert!(run(args).is_err());
+    }
+
+    #[test]
+    fn run_rejects_invalid_contract_address_hex() {
+        let mut args = base_args();
+        args.contract = "not_valid_hex!!".into();
+        let err = run(args).unwrap_err().to_string();
+        assert!(
+            err.contains("invalid contract") || err.contains("hex"),
+            "unexpected: {err}"
+        );
+    }
+
+    #[test]
+    fn run_rejects_invalid_call_arg_hex() {
+        let mut args = base_args();
+        args.args = vec!["xyz!!".into()];
+        let err = run(args).unwrap_err().to_string();
+        assert!(
+            err.contains("invalid hex argument") || err.contains("hex"),
+            "unexpected: {err}"
+        );
+    }
+
+    #[test]
+    fn run_rejects_invalid_type_arg_hex() {
+        let mut args = base_args();
+        args.type_args = vec!["ZZZZ".into()];
+        let err = run(args).unwrap_err().to_string();
+        assert!(
+            err.contains("invalid hex type") || err.contains("hex"),
+            "unexpected: {err}"
+        );
+    }
+
+    #[test]
+    fn run_accepts_0x_prefixed_contract_then_fails_at_key_file() {
+        let mut args = base_args();
+        args.contract = format!("0x{}", hex::encode([1u8; 32]));
+        // Contract parses fine (0x stripped); bail! happens at --key-file.
+        let err = run(args).unwrap_err().to_string();
+        assert!(err.contains("--key-file"), "unexpected: {err}");
+    }
+
+    #[test]
+    fn run_accepts_valid_hex_args_then_fails_at_key_file() {
+        let mut args = base_args();
+        args.args = vec![hex::encode([0xABu8; 4])];
+        args.type_args = vec![hex::encode([0x01u8; 2])];
+        let err = run(args).unwrap_err().to_string();
+        assert!(err.contains("--key-file"), "unexpected: {err}");
+    }
+}

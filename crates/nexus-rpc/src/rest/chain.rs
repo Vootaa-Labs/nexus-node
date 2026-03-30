@@ -39,7 +39,7 @@ async fn chain_head(State(state): State<Arc<AppState>>) -> RpcResult<Json<ChainH
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rest::test_helpers::mock_state;
+    use crate::rest::test_helpers::{mock_state, mock_state_with_chain_head};
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
@@ -53,5 +53,35 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn chain_head_returns_200_with_data() {
+        let head = ChainHeadDto {
+            sequence: 42,
+            anchor_digest: "ab".repeat(32),
+            state_root: "cd".repeat(32),
+            epoch: 3,
+            round: 100,
+            cert_count: 4,
+            tx_count: 10,
+            gas_total: 50_000,
+            committed_at_ms: 1_700_000_000_000,
+        };
+        let app = router().with_state(mock_state_with_chain_head(head));
+        let req = Request::builder()
+            .uri("/v2/chain/head")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let dto: ChainHeadDto = serde_json::from_slice(&body).unwrap();
+        assert_eq!(dto.sequence, 42);
+        assert_eq!(dto.epoch, 3);
+        assert_eq!(dto.tx_count, 10);
     }
 }
