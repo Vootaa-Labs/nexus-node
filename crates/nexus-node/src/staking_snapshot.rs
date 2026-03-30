@@ -1173,7 +1173,10 @@ mod tests {
 
     #[test]
     fn error_display_insufficient_validators() {
-        let err = StakingSnapshotError::InsufficientValidators { found: 2, required: 4 };
+        let err = StakingSnapshotError::InsufficientValidators {
+            found: 2,
+            required: 4,
+        };
         let msg = format!("{err}");
         assert!(msg.contains("insufficient validators"), "{msg}");
         assert!(msg.contains("2"));
@@ -1182,7 +1185,10 @@ mod tests {
 
     #[test]
     fn error_display_insufficient_total_stake() {
-        let err = StakingSnapshotError::InsufficientTotalStake { total: 100, required: 1000 };
+        let err = StakingSnapshotError::InsufficientTotalStake {
+            total: 100,
+            required: 1000,
+        };
         let msg = format!("{err}");
         assert!(msg.contains("insufficient total stake"), "{msg}");
         assert!(msg.contains("100"));
@@ -1198,7 +1204,10 @@ mod tests {
 
     #[test]
     fn error_is_std_error() {
-        let err = StakingSnapshotError::InsufficientValidators { found: 0, required: 4 };
+        let err = StakingSnapshotError::InsufficientValidators {
+            found: 0,
+            required: 4,
+        };
         // Exercises the std::error::Error impl
         let _: &dyn std::error::Error = &err;
     }

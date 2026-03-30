@@ -333,7 +333,8 @@ mod tests {
         fn get_batch(
             &self,
             _digest: &BatchDigest,
-        ) -> Result<Option<Vec<SignedTransaction>>, crate::batch_persist::BatchPersistError> {
+        ) -> Result<Option<Vec<SignedTransaction>>, crate::batch_persist::BatchPersistError>
+        {
             Ok(None)
         }
         fn delete_batch(

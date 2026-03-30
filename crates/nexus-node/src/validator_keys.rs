@@ -354,7 +354,10 @@ mod tests {
         // No public key file
         let result = load_or_derive_verify_key(tmp.path(), &sk);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("no Falcon public key"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("no Falcon public key"));
     }
 
     #[test]
@@ -375,7 +378,10 @@ mod tests {
         std::fs::write(tmp.path().join("falcon.vk"), hex::encode([0u8; 32])).unwrap();
         let result = load_or_derive_verify_key(tmp.path(), &sk);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid key bytes"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid key bytes"));
     }
 
     #[test]
@@ -419,7 +425,10 @@ mod tests {
 
         let result = load_validator_keys(tmp.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid key bytes"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid key bytes"));
     }
 
     #[test]

@@ -598,7 +598,11 @@ mod tests {
         assert!(result.total_bytes > 0);
         assert!(result.artifact_dir.join("manifest.json").exists());
         assert!(result.artifact_dir.join("package-metadata.bcs").exists());
-        assert!(result.artifact_dir.join("bytecode").join("counter.mv").exists());
+        assert!(result
+            .artifact_dir
+            .join("bytecode")
+            .join("counter.mv")
+            .exists());
         assert_eq!(result.metadata.upgrade_policy, UpgradePolicy::Compatible);
         assert_eq!(result.metadata.named_addresses.len(), 1);
     }

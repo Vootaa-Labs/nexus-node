@@ -536,11 +536,26 @@ mod tests {
     #[test]
     fn routing_health_boundary() {
         // Exactly at threshold: 3 buckets, 6 peers → healthy
-        assert!(RoutingHealth { known_peers: 6, filled_buckets: 3, total_buckets: 256 }.is_healthy());
+        assert!(RoutingHealth {
+            known_peers: 6,
+            filled_buckets: 3,
+            total_buckets: 256
+        }
+        .is_healthy());
         // Just below: 3 buckets, 5 peers → not healthy
-        assert!(!RoutingHealth { known_peers: 5, filled_buckets: 3, total_buckets: 256 }.is_healthy());
+        assert!(!RoutingHealth {
+            known_peers: 5,
+            filled_buckets: 3,
+            total_buckets: 256
+        }
+        .is_healthy());
         // 2 buckets, 6 peers → not healthy
-        assert!(!RoutingHealth { known_peers: 6, filled_buckets: 2, total_buckets: 256 }.is_healthy());
+        assert!(!RoutingHealth {
+            known_peers: 6,
+            filled_buckets: 2,
+            total_buckets: 256
+        }
+        .is_healthy());
     }
 
     #[test]

@@ -251,9 +251,14 @@ log_level = "debug"
     fn load_without_file_returns_default() {
         // Clear any NEXUS_ env vars that might be set
         for key in [
-            "NEXUS_LOG_LEVEL", "NEXUS_NETWORK_PORT", "NEXUS_STORAGE_PATH",
-            "NEXUS_GRPC_PORT", "NEXUS_REST_PORT", "NEXUS_GENESIS_PATH",
-            "NEXUS_VALIDATOR_KEY_PATH", "NEXUS_DEV_MODE",
+            "NEXUS_LOG_LEVEL",
+            "NEXUS_NETWORK_PORT",
+            "NEXUS_STORAGE_PATH",
+            "NEXUS_GRPC_PORT",
+            "NEXUS_REST_PORT",
+            "NEXUS_GENESIS_PATH",
+            "NEXUS_VALIDATOR_KEY_PATH",
+            "NEXUS_DEV_MODE",
         ] {
             std::env::remove_var(key);
         }
@@ -268,9 +273,14 @@ log_level = "debug"
         let path = dir.path().join("test.toml");
         std::fs::write(&path, "dev_mode = true\n").expect("write");
         for key in [
-            "NEXUS_LOG_LEVEL", "NEXUS_NETWORK_PORT", "NEXUS_STORAGE_PATH",
-            "NEXUS_GRPC_PORT", "NEXUS_REST_PORT", "NEXUS_GENESIS_PATH",
-            "NEXUS_VALIDATOR_KEY_PATH", "NEXUS_DEV_MODE",
+            "NEXUS_LOG_LEVEL",
+            "NEXUS_NETWORK_PORT",
+            "NEXUS_STORAGE_PATH",
+            "NEXUS_GRPC_PORT",
+            "NEXUS_REST_PORT",
+            "NEXUS_GENESIS_PATH",
+            "NEXUS_VALIDATOR_KEY_PATH",
+            "NEXUS_DEV_MODE",
         ] {
             std::env::remove_var(key);
         }
@@ -302,15 +312,27 @@ log_level = "debug"
         std::env::set_var("NEXUS_VALIDATOR_KEY_PATH", "/etc/nexus/keys");
         let mut cfg = NodeConfig::default();
         NodeConfig::apply_env_overrides(&mut cfg).unwrap();
-        assert_eq!(cfg.genesis_path, Some(PathBuf::from("/etc/nexus/genesis.json")));
-        assert_eq!(cfg.validator_key_path, Some(PathBuf::from("/etc/nexus/keys")));
+        assert_eq!(
+            cfg.genesis_path,
+            Some(PathBuf::from("/etc/nexus/genesis.json"))
+        );
+        assert_eq!(
+            cfg.validator_key_path,
+            Some(PathBuf::from("/etc/nexus/keys"))
+        );
         std::env::remove_var("NEXUS_GENESIS_PATH");
         std::env::remove_var("NEXUS_VALIDATOR_KEY_PATH");
     }
 
     #[test]
     fn env_override_dev_mode_variants() {
-        for (val, expected) in [("1", true), ("true", true), ("yes", true), ("0", false), ("no", false)] {
+        for (val, expected) in [
+            ("1", true),
+            ("true", true),
+            ("yes", true),
+            ("0", false),
+            ("no", false),
+        ] {
             std::env::set_var("NEXUS_DEV_MODE", val);
             let mut cfg = NodeConfig::default();
             NodeConfig::apply_env_overrides(&mut cfg).unwrap();

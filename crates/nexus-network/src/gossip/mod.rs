@@ -581,7 +581,9 @@ mod tests {
     #[test]
     fn get_topic_hash_unknown_returns_none() {
         let registry = TopicRegistry::new();
-        assert!(registry.get_topic_hash(&Topic::ShardedTransaction(99)).is_none());
+        assert!(registry
+            .get_topic_hash(&Topic::ShardedTransaction(99))
+            .is_none());
     }
 
     #[test]

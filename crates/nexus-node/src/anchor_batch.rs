@@ -245,6 +245,9 @@ mod tests {
         // A plain blake3 of the same input without domain tag should differ
         let seed = derive_system_seed("nexus-devnet");
         let plain = *blake3::hash(b"nexus-devnet").as_bytes();
-        assert_ne!(seed, plain, "domain separation must produce different output");
+        assert_ne!(
+            seed, plain,
+            "domain separation must produce different output"
+        );
     }
 }

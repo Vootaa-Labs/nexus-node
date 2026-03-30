@@ -492,10 +492,19 @@ mod tests {
             GenesisValidationError::EmptyChainId,
             GenesisValidationError::NoValidators,
             GenesisValidationError::ZeroShards,
-            GenesisValidationError::InsufficientValidators { count: 2, minimum: 4 },
-            GenesisValidationError::EmptyKey { validator_index: 0, key_type: "falcon_verify_key" },
+            GenesisValidationError::InsufficientValidators {
+                count: 2,
+                minimum: 4,
+            },
+            GenesisValidationError::EmptyKey {
+                validator_index: 0,
+                key_type: "falcon_verify_key",
+            },
             GenesisValidationError::ZeroStake { validator_index: 1 },
-            GenesisValidationError::InvalidHex { validator_index: 0, key_type: "falcon_verify_key" },
+            GenesisValidationError::InvalidHex {
+                validator_index: 0,
+                key_type: "falcon_verify_key",
+            },
             GenesisValidationError::InvalidAllocationAddress { index: 0 },
         ];
         for err in &errors {

@@ -328,8 +328,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                SnapshotSignError::InvalidSignature(_)
-                    | SnapshotSignError::VerificationFailed(_)
+                SnapshotSignError::InvalidSignature(_) | SnapshotSignError::VerificationFailed(_)
             ),
             "unexpected error: {err:?}"
         );
