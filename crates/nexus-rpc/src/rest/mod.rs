@@ -1299,4 +1299,159 @@ pub(crate) mod test_helpers {
             event_backend: None,
         })
     }
+
+    // ── Mock HTLC backend ───────────────────────────────────────────────
+
+    /// Mock HTLC backend for testing.
+    pub struct MockHtlcBackend {
+        pub locks: Mutex<HashMap<Blake3Digest, crate::dto::HtlcLockDto>>,
+        pub pending: Mutex<Vec<crate::dto::HtlcLockDto>>,
+    }
+
+    impl MockHtlcBackend {
+        pub fn new() -> Self {
+            Self {
+                locks: Mutex::new(HashMap::new()),
+                pending: Mutex::new(Vec::new()),
+            }
+        }
+
+        pub fn with_lock(self, digest: Blake3Digest, lock: crate::dto::HtlcLockDto) -> Self {
+            self.locks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(digest, lock);
+            self
+        }
+
+        pub fn with_pending(self, locks: Vec<crate::dto::HtlcLockDto>) -> Self {
+            *self.pending.lock().unwrap_or_else(|e| e.into_inner()) = locks;
+            self
+        }
+    }
+
+    impl HtlcBackend for MockHtlcBackend {
+        fn get_htlc_lock(
+            &self,
+            digest: &Blake3Digest,
+        ) -> RpcResult<Option<crate::dto::HtlcLockDto>> {
+            Ok(self
+                .locks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(digest)
+                .cloned())
+        }
+
+        fn list_pending_htlc_locks(&self, limit: u32) -> RpcResult<crate::dto::HtlcPendingListDto> {
+            let all = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+            let locks: Vec<_> = all.iter().take(limit as usize).cloned().collect();
+            let total = all.len();
+            Ok(crate::dto::HtlcPendingListDto { locks, total })
+        }
+    }
+
+    /// Create test app state with a mock HTLC backend.
+    pub fn mock_state_with_htlc(backend: MockHtlcBackend) -> Arc<AppState> {
+        Arc::new(AppState {
+            query: Arc::new(MockQueryBackend::new()),
+            intent: None,
+            consensus: None,
+            network: None,
+            broadcaster: None,
+            events: None,
+            rate_limiter: None,
+            faucet_addr_limiter: None,
+            metrics_handle: None,
+            faucet_enabled: false,
+            faucet_amount: 0,
+            max_ws_connections: 100,
+            ws_connection_count: std::sync::atomic::AtomicUsize::new(0),
+            intent_tracker: None,
+            session_provenance: None,
+            state_proof: None,
+            mcp_dispatcher: None,
+            mcp_call_index: std::sync::atomic::AtomicU64::new(0),
+            quota_manager: None,
+            query_gas_budget: 10_000_000,
+            query_timeout_ms: 5_000,
+            num_shards: 1,
+            tx_lifecycle: None,
+            htlc: Some(Arc::new(backend)),
+            block: None,
+            event_backend: None,
+        })
+    }
+
+    /// Create a test `AppState` with a custom `QueryBackend` that returns a
+    /// chain head.  Useful for `chain.rs` happy-path tests.
+    pub fn mock_state_with_chain_head(head: crate::dto::ChainHeadDto) -> Arc<AppState> {
+        struct ChainHeadBackend(Mutex<Option<crate::dto::ChainHeadDto>>);
+
+        impl QueryBackend for ChainHeadBackend {
+            fn account_balance(&self, _: &AccountAddress, _: &TokenId) -> Result<Amount, RpcError> {
+                Err(RpcError::Unavailable("unused".into()))
+            }
+
+            fn transaction_receipt(
+                &self,
+                _: &TxDigest,
+            ) -> Result<Option<crate::dto::TransactionReceiptDto>, RpcError> {
+                Ok(None)
+            }
+
+            fn health_status(&self) -> crate::dto::HealthResponse {
+                crate::dto::HealthResponse {
+                    status: "healthy",
+                    version: env!("CARGO_PKG_VERSION"),
+                    peers: 0,
+                    epoch: EpochNumber(0),
+                    latest_commit: CommitSequence(0),
+                    uptime_seconds: 0,
+                    subsystems: Vec::new(),
+                    reason: None,
+                }
+            }
+
+            fn contract_query(
+                &self,
+                _: &crate::dto::ContractQueryRequest,
+            ) -> Result<crate::dto::ContractQueryResponse, RpcError> {
+                Err(RpcError::Unavailable("unused".into()))
+            }
+
+            fn chain_head(&self) -> Result<Option<crate::dto::ChainHeadDto>, RpcError> {
+                Ok(self.0.lock().unwrap_or_else(|e| e.into_inner()).clone())
+            }
+        }
+
+        Arc::new(AppState {
+            query: Arc::new(ChainHeadBackend(Mutex::new(Some(head)))),
+            intent: None,
+            consensus: None,
+            network: None,
+            broadcaster: None,
+            events: None,
+            rate_limiter: None,
+            faucet_addr_limiter: None,
+            metrics_handle: None,
+            faucet_enabled: false,
+            faucet_amount: 0,
+            max_ws_connections: 100,
+            ws_connection_count: std::sync::atomic::AtomicUsize::new(0),
+            intent_tracker: None,
+            session_provenance: None,
+            state_proof: None,
+            mcp_dispatcher: None,
+            mcp_call_index: std::sync::atomic::AtomicU64::new(0),
+            quota_manager: None,
+            query_gas_budget: 10_000_000,
+            query_timeout_ms: 5_000,
+            num_shards: 1,
+            tx_lifecycle: None,
+            htlc: None,
+            block: None,
+            event_backend: None,
+        })
+    }
 }

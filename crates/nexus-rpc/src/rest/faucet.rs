@@ -152,4 +152,38 @@ mod tests {
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
+
+    #[tokio::test]
+    async fn faucet_returns_400_for_invalid_address() {
+        let state = faucet_state(true);
+        let app = router().with_state(state);
+
+        let body = serde_json::json!({ "recipient": "not-valid-hex" });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/v2/faucet/mint")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn faucet_returns_400_for_short_address() {
+        let state = faucet_state(true);
+        let app = router().with_state(state);
+
+        let body = serde_json::json!({ "recipient": "aabb" });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/v2/faucet/mint")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
 }

@@ -1765,7 +1765,7 @@ mod tests {
     use nexus_execution::types::{ExecutionStatus, TransactionReceipt};
     use nexus_network::{NetworkConfig, NetworkService, Topic};
     use nexus_primitives::{Blake3Digest, TimestampMs};
-    use nexus_rpc::TransactionBroadcaster;
+    use nexus_rpc::{EventBackend, TransactionBroadcaster};
     use nexus_storage::{MemoryStore, StateStorage, WriteBatchOps};
 
     /// Helper: create a test store pre-populated with one account balance.
@@ -2191,5 +2191,192 @@ mod tests {
             RpcError::NotFound(msg) => assert!(msg.contains("999")),
             other => panic!("expected NotFound, got {other:?}"),
         }
+    }
+
+    // ── SharedChainHead tests ───────────────────────────────────────
+
+    #[test]
+    fn shared_chain_head_returns_none_by_default() {
+        let head = SharedChainHead::new();
+        assert!(head.get().is_none());
+    }
+
+    fn make_chain_head_dto(seq: u64, tx_count: usize, gas_total: u64) -> ChainHeadDto {
+        ChainHeadDto {
+            sequence: seq,
+            anchor_digest: "aa".repeat(32),
+            state_root: "bb".repeat(32),
+            epoch: 1,
+            round: seq,
+            cert_count: 2,
+            tx_count,
+            gas_total,
+            committed_at_ms: 1_700_000_000_000,
+        }
+    }
+
+    #[test]
+    fn shared_chain_head_update_then_get() {
+        let head = SharedChainHead::new();
+        let dto = make_chain_head_dto(10, 5, 50_000);
+        head.update(dto);
+        let got = head.get().expect("should be Some after update");
+        assert_eq!(got.sequence, 10);
+        assert_eq!(got.tx_count, 5);
+        assert_eq!(got.gas_total, 50_000);
+    }
+
+    #[test]
+    fn shared_chain_head_cumulative_tx_and_gas() {
+        let head = SharedChainHead::new();
+        head.update(make_chain_head_dto(1, 3, 10_000));
+        let mut dto2 = make_chain_head_dto(2, 7, 20_000);
+        dto2.committed_at_ms = 2_000;
+        dto2.anchor_digest = "cc".repeat(32);
+        head.update(dto2);
+        let got = head.get().unwrap();
+        // tx_count and gas_total are cumulative: prev + new
+        assert_eq!(got.sequence, 2);
+        assert_eq!(got.tx_count, 10); // 3 + 7
+        assert_eq!(got.gas_total, 30_000); // 10_000 + 20_000
+        assert_eq!(got.committed_at_ms, 2_000);
+        assert_eq!(got.anchor_digest, "cc".repeat(32));
+    }
+
+    // ── StorageQueryBackend: chain_head / faucet_mint ───────────────
+
+    #[test]
+    fn chain_head_returns_none_by_default() {
+        let store = MemoryStore::new();
+        let backend = make_query_backend(store);
+        let result = backend.chain_head().unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn chain_head_returns_data_after_update() {
+        let store = MemoryStore::new();
+        let head = SharedChainHead::new();
+        head.update(make_chain_head_dto(42, 100, 500_000));
+        let backend = make_query_backend(store).with_chain_head(head);
+        let dto = backend.chain_head().unwrap().expect("should be Some");
+        assert_eq!(dto.sequence, 42);
+        assert_eq!(dto.tx_count, 100);
+    }
+
+    #[test]
+    fn faucet_mint_creates_new_balance() {
+        let store = MemoryStore::new();
+        let addr = AccountAddress([0xFA; 32]);
+        let backend = make_query_backend(store.clone());
+        backend.faucet_mint(&addr, 5_000).unwrap();
+        // Verify balance is readable afterwards.
+        let bal = backend.account_balance(&addr, &TokenId::Native).unwrap();
+        assert_eq!(bal, Amount(5_000));
+    }
+
+    #[test]
+    fn faucet_mint_adds_to_existing_balance() {
+        let addr = AccountAddress([0xFB; 32]);
+        let store = store_with_balance(&addr, Amount(1_000));
+        let backend = make_query_backend(store);
+        backend.faucet_mint(&addr, 2_000).unwrap();
+        let bal = backend.account_balance(&addr, &TokenId::Native).unwrap();
+        assert_eq!(bal, Amount(3_000));
+    }
+
+    // ── StorageEventBackend tests ───────────────────────────────────
+
+    fn store_event(
+        store: &MemoryStore,
+        event: &StoredEvent,
+        block_seq: u64,
+        tx_idx: u32,
+        evt_seq: u32,
+    ) {
+        let primary_key =
+            nexus_storage::EventKey::primary(CommitSequence(block_seq), tx_idx, evt_seq);
+        let encoded = bcs::to_bytes(event).unwrap();
+        store
+            .put_sync(ColumnFamily::Events.as_str(), primary_key, encoded)
+            .unwrap();
+    }
+
+    fn make_stored_event(emitter: AccountAddress, block_seq: u64, seq: u64) -> StoredEvent {
+        StoredEvent {
+            emitter,
+            type_tag: "0x1::coin::TransferEvent".into(),
+            sequence_number: seq,
+            data: vec![0xDE, 0xAD],
+            tx_digest: [0xDD; 32],
+            block_seq,
+            timestamp_ms: 1_700_000_000_000,
+        }
+    }
+
+    #[test]
+    fn event_query_returns_empty_when_no_events() {
+        let store = MemoryStore::new();
+        let backend = StorageEventBackend::new(store);
+        let resp = backend
+            .query_events(None, None, None, None, 10, None)
+            .unwrap();
+        assert!(resp.events.is_empty());
+        assert!(!resp.has_more);
+    }
+
+    #[test]
+    fn event_query_primary_scan_returns_stored_events() {
+        let store = MemoryStore::new();
+        let emitter = AccountAddress([0x01; 32]);
+        let evt1 = make_stored_event(emitter, 1, 0);
+        let evt2 = make_stored_event(emitter, 1, 1);
+        store_event(&store, &evt1, 1, 0, 0);
+        store_event(&store, &evt2, 1, 0, 1);
+
+        let backend = StorageEventBackend::new(store);
+        let resp = backend
+            .query_events(None, None, None, None, 10, None)
+            .unwrap();
+        assert_eq!(resp.events.len(), 2);
+        assert_eq!(resp.events[0].block_seq, 1);
+        assert_eq!(resp.events[1].sequence_number, 1);
+    }
+
+    #[test]
+    fn event_query_respects_limit_and_has_more() {
+        let store = MemoryStore::new();
+        let emitter = AccountAddress([0x02; 32]);
+        for i in 0..5u32 {
+            let evt = make_stored_event(emitter, 1, i as u64);
+            store_event(&store, &evt, 1, 0, i);
+        }
+
+        let backend = StorageEventBackend::new(store);
+        let resp = backend
+            .query_events(None, None, None, None, 3, None)
+            .unwrap();
+        assert_eq!(resp.events.len(), 3);
+        assert!(resp.has_more);
+        assert!(resp.next_cursor.is_some());
+    }
+
+    #[test]
+    fn event_query_filters_by_block_seq_range() {
+        let store = MemoryStore::new();
+        let emitter = AccountAddress([0x03; 32]);
+        for blk in 1..=5u64 {
+            let evt = make_stored_event(emitter, blk, 0);
+            store_event(&store, &evt, blk, 0, 0);
+        }
+
+        let backend = StorageEventBackend::new(store);
+        // after_seq=2, before_seq=5 → blocks 3 and 4
+        let resp = backend
+            .query_events(None, None, Some(2), Some(5), 10, None)
+            .unwrap();
+        assert_eq!(resp.events.len(), 2);
+        assert_eq!(resp.events[0].block_seq, 3);
+        assert_eq!(resp.events[1].block_seq, 4);
     }
 }

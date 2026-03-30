@@ -1077,6 +1077,168 @@ mod tests {
         assert!(back.plan_hash.is_some());
         assert!(back.confirmation_ref.is_none());
     }
+
+    #[test]
+    fn roundtrip_chain_head_dto() {
+        let dto = ChainHeadDto {
+            sequence: 42,
+            anchor_digest: "ab".repeat(32),
+            state_root: "cd".repeat(32),
+            epoch: 3,
+            round: 100,
+            cert_count: 4,
+            tx_count: 10,
+            gas_total: 50_000,
+            committed_at_ms: 1_700_000_000_000,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: ChainHeadDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.sequence, 42);
+        assert_eq!(back.epoch, 3);
+        assert_eq!(back.gas_total, 50_000);
+    }
+
+    #[test]
+    fn roundtrip_shard_topology_dto() {
+        let dto = ShardTopologyDto {
+            num_shards: 4,
+            shards: vec![
+                ShardInfoDto {
+                    shard_id: 0,
+                    validators: vec![0, 1],
+                },
+                ShardInfoDto {
+                    shard_id: 1,
+                    validators: vec![2, 3],
+                },
+            ],
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: ShardTopologyDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.num_shards, 4);
+        assert_eq!(back.shards.len(), 2);
+        assert_eq!(back.shards[0].validators, vec![0, 1]);
+    }
+
+    #[test]
+    fn roundtrip_shard_chain_head_dto() {
+        let dto = ShardChainHeadDto {
+            shard_id: 2,
+            sequence: 100,
+            anchor_digest: "ee".repeat(32),
+            epoch: 5,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: ShardChainHeadDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, dto);
+    }
+
+    #[test]
+    fn roundtrip_htlc_lock_dto() {
+        let dto = HtlcLockDto {
+            lock_digest: "ff".repeat(32),
+            sender: "aa".repeat(32),
+            recipient: "bb".repeat(32),
+            amount: 1_000_000,
+            target_shard: 0,
+            timeout_epoch: 10,
+            status: HtlcStatusDto::Pending,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: HtlcLockDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, dto);
+    }
+
+    #[test]
+    fn roundtrip_htlc_pending_list_dto() {
+        let dto = HtlcPendingListDto {
+            locks: vec![HtlcLockDto {
+                lock_digest: "ff".repeat(32),
+                sender: "aa".repeat(32),
+                recipient: "bb".repeat(32),
+                amount: 500,
+                target_shard: 1,
+                timeout_epoch: 20,
+                status: HtlcStatusDto::Claimed,
+            }],
+            total: 1,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: HtlcPendingListDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.total, 1);
+        assert_eq!(back.locks[0].status, HtlcStatusDto::Claimed);
+    }
+
+    #[test]
+    fn roundtrip_zk_proof_dto() {
+        let dto = ZkProofDto {
+            block_seq: 42,
+            proof_version: "none".into(),
+            encoding_format: "unavailable".into(),
+            proof_bytes_hex: None,
+            verifier_key_hash: None,
+            status: "unavailable".into(),
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: ZkProofDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, dto);
+    }
+
+    #[test]
+    fn roundtrip_account_state_proof_dto() {
+        let dto = AccountStateProofDto {
+            address: "cc".repeat(32),
+            balance: 1_000_000,
+            nonce: 5,
+            state_root: "dd".repeat(32),
+            proof_version: "blake3-merkle-v1".into(),
+            proof: MerkleProofDto {
+                proof_type: "inclusion".into(),
+                leaf_count: 10,
+                leaf_index: Some(3),
+                siblings: vec!["aa".repeat(32)],
+                left_neighbor: None,
+                right_neighbor: None,
+            },
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: AccountStateProofDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.address, "cc".repeat(32));
+        assert_eq!(back.balance, 1_000_000);
+        assert_eq!(back.nonce, 5);
+    }
+
+    #[test]
+    fn roundtrip_validator_info_dto() {
+        let dto = ValidatorInfoDto {
+            index: nexus_primitives::ValidatorIndex(0),
+            public_key_hex: "aa".repeat(16),
+            stake: nexus_primitives::Amount(1_000_000),
+            reputation: 9500,
+            is_slashed: false,
+            shard_id: Some(nexus_primitives::ShardId(0)),
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: ValidatorInfoDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.index, nexus_primitives::ValidatorIndex(0));
+        assert_eq!(back.reputation, 9500);
+    }
+
+    #[test]
+    fn roundtrip_epoch_info_dto() {
+        let dto = EpochInfoDto {
+            epoch: nexus_primitives::EpochNumber(3),
+            epoch_started_at: nexus_primitives::TimestampMs(1_700_000_000_000),
+            committee_size: 7,
+            epoch_commits: 500,
+            epoch_length_commits: 10_000,
+            epoch_length_seconds: 86_400,
+        };
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: EpochInfoDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.epoch, nexus_primitives::EpochNumber(3));
+        assert_eq!(back.committee_size, 7);
+    }
 }
 
 // ── Shard topology DTOs (W-5) ───────────────────────────────────────────

@@ -440,4 +440,84 @@ mod tests {
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
+
+    #[tokio::test]
+    async fn list_validators_returns_empty_list() {
+        let backend = MockConsensusBackend::new().with_validators(vec![]);
+        let state = mock_state_with_consensus(backend);
+        let app = router().with_state(state);
+
+        let req = Request::builder()
+            .uri("/v2/validators")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let result: Vec<ValidatorInfoDto> = serde_json::from_slice(&body).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn election_result_returns_503_via_default_impl() {
+        // The mock doesn't override election_result, so the trait's default
+        // 503 response should be returned.
+        let backend = MockConsensusBackend::new();
+        let state = mock_state_with_consensus(backend);
+        let app = router().with_state(state);
+
+        let req = Request::builder()
+            .uri("/v2/consensus/election/latest")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn rotation_policy_returns_503_via_default_impl() {
+        let backend = MockConsensusBackend::new();
+        let state = mock_state_with_consensus(backend);
+        let app = router().with_state(state);
+
+        let req = Request::builder()
+            .uri("/v2/consensus/rotation-policy")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn staking_validators_returns_503_via_default_impl() {
+        let backend = MockConsensusBackend::new();
+        let state = mock_state_with_consensus(backend);
+        let app = router().with_state(state);
+
+        let req = Request::builder()
+            .uri("/v2/staking/validators")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn advance_epoch_returns_503_via_default_impl() {
+        let backend = MockConsensusBackend::new();
+        let state = mock_state_with_consensus(backend);
+        let app = router().with_state(state);
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/v2/admin/epoch/advance")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"reason":"test advance"}"#))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
 }
