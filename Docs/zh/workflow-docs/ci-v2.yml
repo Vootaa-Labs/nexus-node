@@ -1,0 +1,705 @@
+# Copyright (c) The Nexus-Node Contributors
+# SPDX-License-Identifier: Apache-2.0
+#
+# CI Pipeline v2 — nexus-node
+# Architecture: Build Once → Test Many → Smoke → Gate
+#
+# Key optimizations over v1:
+#   - Single compilation via cargo nextest archive (eliminates ~18 redundant builds)
+#   - Docker image built once from release binaries (runtime-prebuilt target)
+#   - Test jobs download pre-built archives — zero compilation, no Rust toolchain needed
+#   - Devnet smoke and contract smoke merged into one job using shared Docker image
+#
+# Phase 0: Pre-flight (no build) → Phase 1: Build (single compile) →
+# Phase 2: Test gates (parallel, zero-compile) → Phase 3: Smoke (Docker) →
+# Phase 4: Coverage + Release gate
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+  RUST_BACKTRACE: 1
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==========================================================================
+  # Phase 0: Pre-flight — fast checks that need no compilation
+  # ==========================================================================
+  preflight:
+    name: Pre-flight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Install Rust toolchain (rustfmt only)
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Install cargo-machete
+        run: cargo install cargo-machete --version 0.8.0 --locked
+
+      - name: Check unused dependencies
+        run: cargo machete
+
+      - name: Install security tools (pre-built binaries)
+        run: |
+          cargo install cargo-audit --locked
+          cargo install cargo-deny --version 0.18.3 --locked
+
+      - name: Cargo audit (CVE check)
+        run: |
+          cargo audit \
+            --ignore RUSTSEC-2025-0009 \
+            --ignore RUSTSEC-2026-0049 \
+            --ignore RUSTSEC-2026-0009
+
+      - name: Cargo deny (licenses + bans + sources)
+        run: cargo deny check licenses bans sources
+
+      - name: Check no debug features in release
+        run: |
+          if cargo tree --workspace --edges features 2>/dev/null | grep -q 'feature "debug"'; then
+            echo "::error::Debug features detected in dependency tree"
+            exit 1
+          fi
+
+      - name: Config-doc drift check
+        run: |
+          sudo apt-get update && sudo apt-get install -y zsh
+          zsh scripts/config-doc-drift-check.sh
+
+  # ==========================================================================
+  # Phase 1: Unified Build — single compilation producing all artifacts
+  # ==========================================================================
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [preflight]
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+          components: clippy
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+          key: unified-build
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev cmake clang pkg-config libssl-dev
+
+      - name: Install cargo-nextest
+        run: |
+          curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+
+      # --- Clippy (static analysis, piggybacks on compilation) ---
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # --- Test archive (default features) ---
+      - name: Create test archive
+        run: cargo nextest archive --workspace --archive-file nexus-test-archive.tar.zst
+
+      # --- Test archive (move-vm feature) ---
+      - name: Create VM test archive
+        run: |
+          cargo nextest archive \
+            -p nexus-execution -p nexus-wallet -p nexus-test-utils \
+            --features move-vm \
+            --archive-file nexus-vm-test-archive.tar.zst
+
+      # --- Doc-tests (run here — they need the compiler, no extra build cost) ---
+      - name: Run doc-tests
+        run: cargo test --doc
+
+      # --- Release binaries (for Docker image and devnet tooling) ---
+      - name: Build release binaries
+        run: |
+          cargo build --release \
+            -p nexus-node \
+            -p nexus-keygen \
+            -p nexus-genesis \
+            -p nexus-wallet
+
+      # --- Docker image ---
+      - name: Build Docker image (runtime-prebuilt)
+        run: docker build --target runtime-prebuilt -t nexus-node:ci-${{ github.sha }} .
+
+      - name: Save Docker image
+        run: docker save nexus-node:ci-${{ github.sha }} | zstd -1 > nexus-image.tar.zst
+
+      # --- Upload all artifacts ---
+      - name: Upload test archive
+        uses: actions/upload-artifact@v5
+        with:
+          name: nexus-test-archive
+          path: nexus-test-archive.tar.zst
+          retention-days: 1
+
+      - name: Upload VM test archive
+        uses: actions/upload-artifact@v5
+        with:
+          name: nexus-vm-test-archive
+          path: nexus-vm-test-archive.tar.zst
+          retention-days: 1
+
+      - name: Upload Docker image
+        uses: actions/upload-artifact@v5
+        with:
+          name: nexus-docker-image
+          path: nexus-image.tar.zst
+          retention-days: 1
+
+      - name: Upload release binaries
+        uses: actions/upload-artifact@v5
+        with:
+          name: nexus-release-binaries
+          path: |
+            target/release/nexus-node
+            target/release/nexus-keygen
+            target/release/nexus-genesis
+            target/release/nexus-wallet
+          retention-days: 1
+
+  # ==========================================================================
+  # Phase 2: Test Gates — zero compilation, parallel execution
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # Core Tests: full nextest suite + crypto KAT
+  # --------------------------------------------------------------------------
+  core-tests:
+    name: Core Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [build]
+    steps:
+      - name: Install cargo-nextest
+        run: |
+          curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/bin
+
+      - name: Download test archive
+        uses: actions/download-artifact@v5
+        with:
+          name: nexus-test-archive
+
+      - name: Run tests (nextest)
+        run: cargo nextest run --archive-file nexus-test-archive.tar.zst --profile ci
+
+      - name: Run crypto KAT (known-answer tests)
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-crypto -- --ignored --test-threads=1
+
+  # --------------------------------------------------------------------------
+  # Safety Tests: negative correctness (Phase A-F) + recovery + cold-restart
+  # --------------------------------------------------------------------------
+  safety-tests:
+    name: Safety Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [build]
+    steps:
+      - name: Install cargo-nextest
+        run: |
+          curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/bin
+
+      - name: Download test archive
+        uses: actions/download-artifact@v5
+        with:
+          name: nexus-test-archive
+
+      # Phase A: Execution correctness
+      - name: "Phase A: Execution correctness"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst --all-targets \
+            -E 'test(forged_vote_should_be_rejected) | test(forged_transaction_should_be_rejected_at_gossip_ingress) | test(execution_failure_should_not_drop_committed_batch) | test(snapshot_import_should_reject_corrupted_manifest) | test(snapshot_path_should_reject_parent_traversal) | test(agent_replay_should_be_rejected_by_idempotency_key) | test(session_capacity_should_be_enforced) | test(mvhashmap_hot_key_conflicts_should_not_drop_validation_history)'
+
+      # Phase B: Execution-layer safety closure
+      - name: "Phase B: Execution-layer safety closure"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst --all-targets \
+            -E 'test(execution_should_reject_forged_signed_transaction) | test(execution_should_reject_sender_pk_mismatch) | test(execution_should_reject_replayed_sequence_number) | test(execution_should_reject_expired_transaction) | test(execution_should_reject_wrong_chain_id) | test(remote_proposal_with_invalid_tx_should_be_rejected) | test(pending_proposals_should_be_bounded) | test(committed_buffer_backpressure)'
+
+      # Phase C: Consensus safety
+      - name: "Phase C: Consensus safety"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst --all-targets \
+            -E 'test(dag_should_reject_equivocating_certificate_same_origin_round) | test(certificate_verifier_should_reject_wrong_epoch) | test(insert_verified_certificate_should_reject_external_untrusted_input) | test(shoal_should_not_permanently_skip_late_anchor_without_recovery)'
+
+      # Phase D: Sync & snapshot integrity
+      - name: "Phase D: Sync & snapshot integrity"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst --all-targets \
+            -E 'test(state_sync_should_not_amplify_single_request_across_cluster) | test(state_sync_should_reject_unverified_block_response) | test(snapshot_import_hash_failure_should_not_mutate_database) | test(snapshot_import_should_be_confined_to_snapshot_base_dir) | test(prune_should_be_atomic_across_column_families)'
+
+      # Phase E: Auth boundaries & capacity
+      - name: "Phase E: Auth boundaries & capacity"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst --all-targets \
+            -E 'test(network_rate_limiter_should_fail_closed_when_bucket_table_is_full) | test(faucet_limiter_should_fail_closed_when_address_table_is_full) | test(mcp_caller_identity_should_be_authenticated) | test(a2a_message_with_invalid_signature_should_be_rejected) | test(dead_letter_circuit_breaker_constant_is_bounded)'
+
+      # Phase F: Determinism & consistency gate
+      - name: "Phase F: Determinism & consistency gate"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst --all-targets \
+            -E 'test(state_root_consistency_across_nodes) | test(serial_and_parallel_replay_state_roots_match_across_nodes)'
+
+      # Recovery tests
+      - name: "Recovery tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-test-utils -E 'test(recovery_tests)' -- --test-threads=1
+
+      # Cold-restart recovery
+      - name: "Cold-restart recovery"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-test-utils -E 'test(cold_restart_) | test(persistence_)'
+
+  # --------------------------------------------------------------------------
+  # Integration Tests: startup-readiness + epoch-reconfig + proof-surface
+  # --------------------------------------------------------------------------
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build]
+    steps:
+      - name: Install cargo-nextest
+        run: |
+          curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/bin
+
+      - name: Download test archive
+        uses: actions/download-artifact@v5
+        with:
+          name: nexus-test-archive
+
+      # Startup-readiness gate
+      - name: "Readiness tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-test-utils -E 'test(readiness_tests::) | test(chaos_readiness_tests::) | test(lifecycle_tests::) | test(node_e2e_tests::)'
+
+      - name: "RPC readiness unit tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-rpc -E 'test(readiness)'
+
+      # Epoch-reconfig gate
+      - name: "Epoch tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-test-utils -E 'test(epoch_tests::) | test(epoch_stress_tests::) | test(governance_recovery_tests::)'
+
+      - name: "Consensus epoch tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-consensus -E 'test(epoch)'
+
+      - name: "Epoch store persistence"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-node -E 'test(epoch_store)'
+
+      # Proof-surface gate
+      - name: "Proof tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-test-utils -E 'test(proof_tests::) | test(proof_smoke_tests::) | test(epoch_e2e_consistency_tests::)'
+
+      - name: "Storage commitment tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-storage -E 'test(commitment)'
+
+      - name: "Snapshot signing tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-node -E 'test(snapshot_signing)'
+
+      - name: "RPC proof endpoint tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-rpc -E 'test(proof)'
+
+  # --------------------------------------------------------------------------
+  # VM Tests: Move VM integration tests
+  # --------------------------------------------------------------------------
+  vm-tests:
+    name: VM Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build]
+    steps:
+      - name: Install cargo-nextest
+        run: |
+          curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/bin
+
+      - name: Download VM test archive
+        uses: actions/download-artifact@v5
+        with:
+          name: nexus-vm-test-archive
+
+      - name: Run Move VM integration tests
+        run: |
+          cargo nextest run --archive-file nexus-vm-test-archive.tar.zst
+
+      - name: Download default test archive (for nexus_vm unit tests)
+        uses: actions/download-artifact@v5
+        with:
+          name: nexus-test-archive
+
+      - name: Validate nexus_vm test surface
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-execution -E 'test(nexus_vm)'
+
+  # --------------------------------------------------------------------------
+  # Formal Verification: property tests + differential corpus + stake quorum
+  # --------------------------------------------------------------------------
+  formal-verify:
+    name: Formal Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [build]
+    steps:
+      - name: Install cargo-nextest
+        run: |
+          curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/bin
+
+      - name: Download test archive
+        uses: actions/download-artifact@v5
+        with:
+          name: nexus-test-archive
+
+      - name: "FV-1: Differential corpus auto-runner"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-test-utils -E 'test(fv_diff_)'
+
+      - name: "FV-5a: Consensus property tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-consensus -E 'test(fv_proptest) | test(fv_property_tests)'
+
+      - name: "FV-5c: Intent property tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-intent -E 'test(fv_proptest)'
+
+      - name: "FV-5d: Execution property tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-execution -E 'test(fv_proptest)'
+
+      - name: "Stake-weighted quorum property tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-consensus -E 'test(j8_)'
+
+      - name: "Stake-weighted certificate integration tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-test-utils -E 'test(stake_weighted_cert_tests::)'
+
+      - name: "Economic foundation E2E tests"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-test-utils -E 'test(economic_foundation_tests::)'
+
+  # --------------------------------------------------------------------------
+  # Capacity & Gas: tier matrix + gas calibration
+  # --------------------------------------------------------------------------
+  capacity-gas:
+    name: Capacity & Gas
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build]
+    steps:
+      - name: Install cargo-nextest
+        run: |
+          curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/bin
+
+      - name: Download test archive
+        uses: actions/download-artifact@v5
+        with:
+          name: nexus-test-archive
+
+      - name: "Capacity curves gate"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-rpc -E 'test(config_defaults_match_access_policy) | test(tier_hierarchy_invariant) | test(capacity_curve_exact_boundary) | test(cross_class_independence) | test(quota_manager_fail_closed_at_capacity) | test(multi_ip_capacity_curve)'
+
+      - name: "Gas calibration gate"
+        run: |
+          cargo nextest run --archive-file nexus-test-archive.tar.zst \
+            -p nexus-execution -E 'test(gas_calibration)'
+
+  # ==========================================================================
+  # Phase 3: Smoke Tests — using pre-built Docker image
+  # ==========================================================================
+  smoke-tests:
+    name: Devnet & Contract Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build, core-tests, safety-tests, vm-tests]
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq zstd
+
+      - name: Download Docker image
+        uses: actions/download-artifact@v5
+        with:
+          name: nexus-docker-image
+
+      - name: Load Docker image
+        run: zstd -d nexus-image.tar.zst | docker load
+
+      - name: Download release binaries
+        uses: actions/download-artifact@v5
+        with:
+          name: nexus-release-binaries
+          path: target/release
+
+      - name: Make binaries executable
+        run: chmod +x target/release/nexus-*
+
+      - name: Bootstrap 4-node devnet
+        run: |
+          export PATH="$PWD/target/release:$PATH"
+          ./scripts/setup-devnet.sh \
+            -n 4 \
+            -c nexus-ci-smoke \
+            -o ./devnet-smoke-ci \
+            -f
+
+      - name: Generate docker-compose
+        run: |
+          export PATH="$PWD/target/release:$PATH"
+          ./scripts/generate-compose.sh \
+            -n 4 \
+            -o ./docker-compose-smoke-ci.yml \
+            -d ./devnet-smoke-ci
+
+      - name: Start cluster
+        run: docker compose -f docker-compose-smoke-ci.yml up -d
+
+      - name: Verify containers are running
+        run: |
+          sleep 5
+          docker compose -f docker-compose-smoke-ci.yml ps
+
+      - name: Wait for all nodes to become ready (180s max)
+        run: |
+          for i in 0 1 2 3; do
+            PORT=$((8080 + i))
+            echo "Waiting for node-$i on port $PORT..."
+            ELAPSED=0
+            while [ "$ELAPSED" -lt 180 ]; do
+              HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PORT}/ready" 2>/dev/null || echo "000")
+              if [ "$HTTP_CODE" = "200" ]; then
+                echo "  node-$i ready after ${ELAPSED}s"
+                break
+              fi
+              if [ "$((ELAPSED % 30))" -eq 0 ] && [ "$ELAPSED" -gt 0 ]; then
+                echo "  node-$i still waiting (${ELAPSED}s, last HTTP $HTTP_CODE)..."
+              fi
+              sleep 3
+              ELAPSED=$((ELAPSED + 3))
+            done
+            if [ "$ELAPSED" -ge 180 ]; then
+              echo "::error::node-$i failed to become ready within 180s"
+              docker compose -f docker-compose-smoke-ci.yml logs "nexus-node-$i" | tail -50
+              exit 1
+            fi
+          done
+
+      - name: Verify consensus is advancing
+        run: |
+          COMMITS_BEFORE=$(curl -sf http://localhost:8080/v2/consensus/status \
+            | grep -o '"total_commits":[0-9]*' | grep -o '[0-9]*' || echo "0")
+          echo "Commits before: $COMMITS_BEFORE"
+          sleep 30
+          COMMITS_AFTER=$(curl -sf http://localhost:8080/v2/consensus/status \
+            | grep -o '"total_commits":[0-9]*' | grep -o '[0-9]*' || echo "0")
+          echo "Commits after:  $COMMITS_AFTER"
+          DELTA=$((COMMITS_AFTER - COMMITS_BEFORE))
+          echo "Delta: $DELTA"
+          if [ "$DELTA" -lt 1 ]; then
+            echo "::error::Consensus not advancing ($COMMITS_BEFORE → $COMMITS_AFTER)"
+            docker compose -f docker-compose-smoke-ci.yml logs --tail=50
+            exit 1
+          fi
+          echo "Consensus advancing (delta=$DELTA)"
+
+      - name: Verify peer connectivity
+        run: |
+          for i in 0 1 2 3; do
+            PORT=$((8080 + i))
+            PEERS=$(curl -sf "http://localhost:${PORT}/health" \
+              | grep -o '"peers":[0-9]*' | grep -o '[0-9]*' || echo "0")
+            echo "node-$i peers: $PEERS"
+            if [ "$PEERS" -lt 1 ]; then
+              echo "::warning::node-$i has $PEERS peers (expected >= 1)"
+            fi
+          done
+
+      - name: Verify chain head
+        run: |
+          HEAD=$(curl -sf http://localhost:8080/v2/chain/head \
+            | grep -o '"sequence":[0-9]*' | grep -o '[0-9]*' || echo "0")
+          echo "Chain head sequence: $HEAD"
+          if [ "$HEAD" -lt 1 ]; then
+            echo "::error::Chain head not advancing (sequence=$HEAD)"
+            exit 1
+          fi
+
+      - name: Contract smoke test
+        run: ./scripts/contract-smoke-test.sh -k ./devnet-smoke-ci/validator-0/keys
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker-compose-smoke-ci.yml logs --tail=100 > devnet-logs.txt 2>&1
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: smoke-logs
+          path: devnet-logs.txt
+          retention-days: 7
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose-smoke-ci.yml down -v
+
+  # ==========================================================================
+  # Phase 4a: Coverage (independent instrumented build — the only 2nd compile)
+  # ==========================================================================
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: [build]
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        with:
+          toolchain: "1.85.0"
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          cache-on-failure: true
+          key: coverage
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --version 0.6.21 --locked
+
+      - name: Generate coverage artifacts
+        run: make coverage-docs
+
+      - name: Publish coverage summary
+        run: |
+          python3 scripts/write_coverage_ci_summary.py \
+            --scorecard-json target/llvm-cov/package-scorecard.json \
+            --output target/llvm-cov/ci-summary.md
+          cat target/llvm-cov/ci-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce P0/P1 coverage gates
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          data = json.loads(open("target/llvm-cov/package-scorecard.json").read())
+          failures = [
+              p["package"] for p in data.get("packages", [])
+              if p.get("status") == "below-target"
+          ]
+          if failures:
+              print(f"::error::Coverage gate FAILED — below target: {', '.join(failures)}")
+              sys.exit(1)
+          print(f"Coverage gate PASSED — all {len(data['packages'])} tracked packages meet their targets.")
+          EOF
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-artifacts
+          path: |
+            lcov.info
+            target/llvm-cov/coverage-summary.json
+            target/llvm-cov/package-scorecard.json
+            target/llvm-cov/package-scorecard.md
+            target/llvm-cov/ci-summary.md
+            target/llvm-cov/html/**
+            Docs/en/Report/Coverage_Report_v*.md
+            Docs/zh/Report/Coverage_Report_v*.md
+
+  # ==========================================================================
+  # Phase 4b: Release Go/No-Go — aggregation gate
+  # ==========================================================================
+  release-go-nogo:
+    name: Release Go/No-Go
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - preflight
+      - core-tests
+      - safety-tests
+      - integration-tests
+      - vm-tests
+      - formal-verify
+      - capacity-gas
+      - smoke-tests
+      - coverage
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq zsh
+
+      - name: "Run go/no-go checklist"
+        run: zsh scripts/release-go-nogo.sh --json
